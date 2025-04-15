@@ -40,7 +40,7 @@ class DASProcessor:
         """
         return signal.butter(N=order, Wn=cutoff, btype=btype, fs=self.fs, output="sos")
 
-    def apply_filter(self, data: np.ndarray, sos: np.ndarray) -> np.ndarray:
+    def ApplyFilter(self, data: np.ndarray, sos: np.ndarray) -> np.ndarray:
         """应用滤波器 (零相位)
 
         Args:
@@ -56,7 +56,7 @@ class DASProcessor:
         filtered_data = signal.sosfiltfilt(sos, data, axis=0)
         return filtered_data
 
-    def normalize_dc(self, data: np.ndarray) -> np.ndarray:
+    def NormalizeDC(self, data: np.ndarray) -> np.ndarray:
         """移除直流偏置 (按列)
 
         Args:
@@ -67,7 +67,7 @@ class DASProcessor:
         """
         return data - np.mean(data, axis=0, keepdims=True)
 
-    def process_differential(self, raw_data: np.ndarray) -> np.ndarray:
+    def ProcessDifferential(self, raw_data: np.ndarray) -> np.ndarray:
         """处理原始数据，得到差分数据 (高通滤波和去直流)
 
         Args:
@@ -77,12 +77,12 @@ class DASProcessor:
             np.ndarray: 处理后的差分数据
         """
         # 高通滤波
-        filtered_data = self.apply_filter(raw_data, self.sos_highpass)
+        filtered_data = self.ApplyFilter(raw_data, self.sos_highpass)
         # DC偏置校正
-        processed_data = self.normalize_dc(filtered_data)
+        processed_data = self.NormalizeDC(filtered_data)
         return processed_data
 
-    def integrate_data(self, raw_data: np.ndarray) -> np.ndarray:
+    def IntegrateData(self, raw_data: np.ndarray) -> np.ndarray:
         """计算积分数据 (累加、高通滤波、去直流)
 
         Args:
@@ -94,12 +94,12 @@ class DASProcessor:
         # 计算累积和 (积分)
         int_data = np.cumsum(raw_data, axis=0)
         # 高通滤波
-        filtered_int_data = self.apply_filter(int_data, self.sos_highpass)
+        filtered_int_data = self.ApplyFilter(int_data, self.sos_highpass)
         # DC偏置校正
-        processed_int_data = self.normalize_dc(filtered_int_data)
+        processed_int_data = self.NormalizeDC(filtered_int_data)
         return processed_int_data
 
-    def compute_spectrum(
+    def ComputeSpectrum(
         self,
         data: np.ndarray,
         channel_index: int,
@@ -143,7 +143,7 @@ class DASProcessor:
 
         return {"frequencies": frequencies, "magnitudes": magnitudes}
 
-    def find_peak_frequencies(
+    def FindPeakFrequencies(
         self,
         spectrum: Dict[str, np.ndarray],
         min_freq: float = 0,
@@ -202,14 +202,12 @@ class DASProcessor:
             result.append({
                 "frequency": valid_freqs[idx],
                 "magnitude": valid_mags[idx],
-                # 可以选择性地添加凸起度信息
-                # "prominence": properties["prominences"][np.where(peaks == idx)[0][0]]
             })
 
         self.logger.debug(f"找到 {len(result)} 个峰值: {result}")
         return result
 
-    def apply_bandpass_filter(
+    def ApplyBandpassFilter(
         self, data: np.ndarray, low_freq: float, high_freq: float
     ) -> np.ndarray:
         """应用带通滤波器
@@ -228,10 +226,10 @@ class DASProcessor:
         )
 
         # 应用滤波器
-        filtered_data = self.apply_filter(data, sos_bandpass)
+        filtered_data = self.ApplyFilter(data, sos_bandpass)
         return filtered_data
 
-    def evaluate_frequency_response(
+    def EvaluateFrequencyResponse(
         self, data: np.ndarray, target_frequencies: List[float], window_size: int = 1024
     ) -> List[Dict[str, Any]]:
         """分析特定频率下的响应
@@ -268,10 +266,9 @@ class DASProcessor:
                 )
                 continue
 
-            filtered_data = self.apply_bandpass_filter(data, low_freq, high_freq)
+            filtered_data = self.ApplyBandpassFilter(data, low_freq, high_freq)
 
             # 计算每个通道滤波后的均方根 (RMS) 值作为响应强度
-            # RMS = sqrt(mean(signal^2))
             rms_values = np.sqrt(np.mean(filtered_data**2, axis=0))
 
             if rms_values.size == 0:
@@ -291,9 +288,6 @@ class DASProcessor:
                 "max_response_channel": int(max_response_channel),  # 确保是整数
                 "peak_response_value": peak_response_value,
                 "all_channel_responses": rms_values,  # 返回所有通道的RMS值
-                # 如果需要，可以保留滤波后的数据或频谱，但会增加内存消耗
-                # "filtered_data": filtered_data,
-                # "spectrum_at_max_channel": self.compute_spectrum(filtered_data, max_response_channel, window_size)
             })
 
         return analysis_results

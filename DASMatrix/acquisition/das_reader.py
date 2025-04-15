@@ -32,7 +32,7 @@ class DataReader(ABC):
         self.logger = logging.getLogger(__name__)
 
     @abstractmethod
-    def read_raw_data(
+    def ReadRawData(
         self, file_path: Path, target_col: Optional[list] = None
     ) -> np.ndarray:
         """读取原始数据
@@ -46,7 +46,7 @@ class DataReader(ABC):
         """
         pass
 
-    def validate_file(self, file_path: Path) -> None:
+    def ValidateFile(self, file_path: Path) -> None:
         """验证文件是否存在且可读
 
         Args:
@@ -73,7 +73,7 @@ class DataReader(ABC):
 class DATReader(DataReader):
     """DAT格式数据读取器"""
 
-    def read_raw_data(
+    def ReadRawData(
         self, file_path: Path, target_col: Optional[list] = None
     ) -> np.ndarray:
         """读取DAT格式的原始数据
@@ -85,7 +85,7 @@ class DATReader(DataReader):
         Returns:
             np.ndarray: 读取的原始数据
         """
-        self.validate_file(file_path)
+        self.ValidateFile(file_path)
 
         # 计算行数
         file_info = file_path.stat()
@@ -121,7 +121,7 @@ class DATReader(DataReader):
 class H5Reader(DataReader):
     """HDF5格式数据读取器"""
 
-    def read_raw_data(
+    def ReadRawData(
         self, file_path: Path, target_col: Optional[list] = None
     ) -> np.ndarray:
         """读取HDF5格式的原始数据
@@ -133,7 +133,7 @@ class H5Reader(DataReader):
         Returns:
             np.ndarray: 读取的原始数据
         """
-        self.validate_file(file_path)
+        self.ValidateFile(file_path)
 
         try:
             with h5py.File(file_path, "r") as f:
@@ -179,7 +179,7 @@ class DASReader:
         else:
             raise ValueError(f"不支持的数据类型: {data_type}")
 
-    def read_data(
+    def ReadRawData(
         self, file_path: Path, target_col: Optional[list] = None
     ) -> np.ndarray:
         """读取指定路径的数据文件
@@ -193,7 +193,7 @@ class DASReader:
         """
         try:
             # 读取原始数据
-            raw_data = self.reader.read_raw_data(file_path, target_col)
+            raw_data = self.reader.ReadRawData(file_path, target_col)
             return raw_data
         except Exception as e:
             self.logger.error(f"读取数据时发生错误: {e}，文件路径: {file_path}")
