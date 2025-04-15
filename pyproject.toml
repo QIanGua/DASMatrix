@@ -18,7 +18,7 @@ classifiers = [
 ]
 
 [tool.setuptools]
-packages = ["DASMatrix", "DASMatrix.acquisition", "DASMatrix.config", "DASMatrix.processing", "DASMatrix.visualization", "DASMatrix.utils"]
+packages = ["DASMatrix", "DASMatrix.acquisition", "DASMatrix.config", "DASMatrix.processing", "DASMatrix.visualization"]
 
 [tool.ruff]
 line-length = 88 # 示例配置
