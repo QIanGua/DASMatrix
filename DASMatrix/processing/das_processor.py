@@ -262,7 +262,8 @@ class DASProcessor:
 
             if low_freq >= high_freq:
                 self.logger.warning(
-                    f"频率 {freq}Hz 计算出的带宽无效 [{low_freq:.2f}, {high_freq:.2f}]，跳过此频率"
+                    f"频率 {freq}Hz 计算出的带宽无效 [{low_freq:.2f}, {high_freq:.2f}]"
+                    f"跳过此频率"
                 )
                 continue
 
@@ -280,7 +281,8 @@ class DASProcessor:
             peak_response_value = rms_values[max_response_channel]
 
             self.logger.debug(
-                f"频率 {freq}Hz: 最大响应通道 {max_response_channel}, 峰值RMS {peak_response_value:.4f}"
+                f"频率 {freq}Hz: 最大响应通道 {max_response_channel}, "
+                f"峰值RMS {peak_response_value:.4f}"
             )
 
             analysis_results.append({
