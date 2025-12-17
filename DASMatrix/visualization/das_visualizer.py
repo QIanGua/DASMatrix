@@ -49,74 +49,76 @@ class PlotBase(ABC):
         sns.set_palette(colors)
 
         # 应用通用样式设置 - Nature/Science风格
-        plt.rcParams.update({
-            "figure.dpi": self.config.dpi,
-            "figure.figsize": self.config.figsize_standard,
-            "figure.facecolor": "white",
-            "figure.autolayout": True,  # 自动处理布局
-            # 坐标轴设置 - 封闭边框
-            "axes.grid": self.config.grid,
-            "axes.linewidth": 1.0,  # 边框线宽
-            "axes.edgecolor": "black",  # 边框颜色
-            "axes.spines.top": True,  # 添加顶部边框
-            "axes.spines.right": True,  # 添加右侧边框
-            "axes.spines.bottom": True,
-            "axes.spines.left": True,
-            "axes.axisbelow": True,  # 网格线在数据下方
-            "axes.facecolor": "white",
-            "axes.labelcolor": "black",
-            "axes.prop_cycle": plt.cycler("color", colors),
-            # 网格线设置
-            "grid.color": "#E0E0E0",
-            "grid.linestyle": self.config.grid_style,
-            "grid.alpha": 0.7,
-            "grid.linewidth": 0.5,
-            # 线条设置
-            "lines.linewidth": 1.5,
-            "lines.markeredgewidth": 1.0,
-            "lines.markersize": 4,
-            "lines.solid_capstyle": "round",
-            # 字体设置 - 期刊标准
-            "font.family": font_family,
-            "font.size": 11,
-            "font.weight": "normal",
-            "axes.labelsize": 12,
-            "axes.titlesize": 14,
-            "axes.titleweight": "bold",  # 加粗标题
-            "axes.labelweight": "normal",
-            "xtick.labelsize": 10,
-            "ytick.labelsize": 10,
-            "legend.fontsize": 10,
-            "axes.unicode_minus": False,  # 解决负号显示问题
-            # 刻度线设置 - 内向刻度
-            "xtick.direction": "in",
-            "ytick.direction": "in",
-            "xtick.major.width": 1.0,
-            "ytick.major.width": 1.0,
-            "xtick.minor.width": 0.5,
-            "ytick.minor.width": 0.5,
-            "xtick.major.size": 4.0,
-            "ytick.major.size": 4.0,
-            "xtick.minor.size": 2.0,
-            "ytick.minor.size": 2.0,
-            "xtick.top": True,  # 顶部刻度显示
-            "ytick.right": True,  # 右侧刻度显示
-            # 图例设置
-            "legend.frameon": True,
-            "legend.framealpha": 0.8,
-            "legend.fancybox": False,  # 直角边框
-            "legend.facecolor": "white",
-            "legend.edgecolor": "black",
-            # 保存设置
-            "savefig.dpi": self.config.dpi,
-            "savefig.bbox": "tight",
-            "savefig.pad_inches": 0.05,
-            "savefig.transparent": False,
-            # 强制显示所有边框和刻度线
-            "axes.autolimit_mode": "data",
-            "axes.xmargin": 0.05,
-            "axes.ymargin": 0.05,
-        })
+        plt.rcParams.update(
+            {
+                "figure.dpi": self.config.dpi,
+                "figure.figsize": self.config.figsize_standard,
+                "figure.facecolor": "white",
+                "figure.autolayout": True,  # 自动处理布局
+                # 坐标轴设置 - 封闭边框
+                "axes.grid": self.config.grid,
+                "axes.linewidth": 1.0,  # 边框线宽
+                "axes.edgecolor": "black",  # 边框颜色
+                "axes.spines.top": True,  # 添加顶部边框
+                "axes.spines.right": True,  # 添加右侧边框
+                "axes.spines.bottom": True,
+                "axes.spines.left": True,
+                "axes.axisbelow": True,  # 网格线在数据下方
+                "axes.facecolor": "white",
+                "axes.labelcolor": "black",
+                "axes.prop_cycle": plt.cycler("color", colors),
+                # 网格线设置
+                "grid.color": "#E0E0E0",
+                "grid.linestyle": self.config.grid_style,
+                "grid.alpha": 0.7,
+                "grid.linewidth": 0.5,
+                # 线条设置
+                "lines.linewidth": 1.5,
+                "lines.markeredgewidth": 1.0,
+                "lines.markersize": 4,
+                "lines.solid_capstyle": "round",
+                # 字体设置 - 期刊标准
+                "font.family": font_family,
+                "font.size": 11,
+                "font.weight": "normal",
+                "axes.labelsize": 12,
+                "axes.titlesize": 14,
+                "axes.titleweight": "bold",  # 加粗标题
+                "axes.labelweight": "normal",
+                "xtick.labelsize": 10,
+                "ytick.labelsize": 10,
+                "legend.fontsize": 10,
+                "axes.unicode_minus": False,  # 解决负号显示问题
+                # 刻度线设置 - 内向刻度
+                "xtick.direction": "in",
+                "ytick.direction": "in",
+                "xtick.major.width": 1.0,
+                "ytick.major.width": 1.0,
+                "xtick.minor.width": 0.5,
+                "ytick.minor.width": 0.5,
+                "xtick.major.size": 4.0,
+                "ytick.major.size": 4.0,
+                "xtick.minor.size": 2.0,
+                "ytick.minor.size": 2.0,
+                "xtick.top": True,  # 顶部刻度显示
+                "ytick.right": True,  # 右侧刻度显示
+                # 图例设置
+                "legend.frameon": True,
+                "legend.framealpha": 0.8,
+                "legend.fancybox": False,  # 直角边框
+                "legend.facecolor": "white",
+                "legend.edgecolor": "black",
+                # 保存设置
+                "savefig.dpi": self.config.dpi,
+                "savefig.bbox": "tight",
+                "savefig.pad_inches": 0.05,
+                "savefig.transparent": False,
+                # 强制显示所有边框和刻度线
+                "axes.autolimit_mode": "data",
+                "axes.xmargin": 0.05,
+                "axes.ymargin": 0.05,
+            }
+        )
 
         # 设置默认的图形，确保边框和刻度线设置正确
         # 避免使用回调函数，直接设置默认样式
@@ -429,16 +431,20 @@ class WaveformPlot(PlotBase):
                         min_times.append(time_data[min_idx])
 
                 # 合并均匀采样点和极值点
-                plot_time_data = np.concatenate([
-                    plot_time_data,
-                    np.array(max_times),
-                    np.array(min_times),
-                ])
-                plot_amplitude_data = np.concatenate([
-                    plot_amplitude_data,
-                    np.array(max_vals),
-                    np.array(min_vals),
-                ])
+                plot_time_data = np.concatenate(
+                    [
+                        plot_time_data,
+                        np.array(max_times),
+                        np.array(min_times),
+                    ]
+                )
+                plot_amplitude_data = np.concatenate(
+                    [
+                        plot_amplitude_data,
+                        np.array(max_vals),
+                        np.array(min_vals),
+                    ]
+                )
 
                 # 按时间排序
                 sort_idx = np.argsort(plot_time_data)
@@ -799,10 +805,12 @@ class WaterfallPlot(PlotBase):
                 # 根据时间长度格式化标签
                 if max(time_values) > 60:
                     # 如果时间超过60秒，使用分:秒格式
-                    ax.set_yticklabels([
-                        f"{int(time_values[i] / 60)}:{int(time_values[i] % 60):02d}"
-                        for i in tick_indices
-                    ])
+                    ax.set_yticklabels(
+                        [
+                            f"{int(time_values[i] / 60)}:{int(time_values[i] % 60):02d}"
+                            for i in tick_indices
+                        ]
+                    )
                     y_label = "Time (min:sec)"
                 else:
                     # 否则使用秒格式

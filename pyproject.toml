@@ -16,6 +16,12 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+    "h5py>=3.11.0",
+    "matplotlib>=3.7.5",
+    "pywavelets>=1.4.1",
+    "scipy>=1.10.1",
+]
 
 [tool.setuptools]
 packages = ["DASMatrix", "DASMatrix.acquisition", "DASMatrix.config", "DASMatrix.processing", "DASMatrix.visualization"]

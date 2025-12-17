@@ -199,10 +199,12 @@ class DASProcessor:
         # 构建结果
         result = []
         for idx in top_peak_indices:
-            result.append({
-                "frequency": valid_freqs[idx],
-                "magnitude": valid_mags[idx],
-            })
+            result.append(
+                {
+                    "frequency": valid_freqs[idx],
+                    "magnitude": valid_mags[idx],
+                }
+            )
 
         self.logger.debug(f"找到 {len(result)} 个峰值: {result}")
         return result
@@ -285,11 +287,13 @@ class DASProcessor:
                 f"峰值RMS {peak_response_value:.4f}"
             )
 
-            analysis_results.append({
-                "freq": freq,
-                "max_response_channel": int(max_response_channel),  # 确保是整数
-                "peak_response_value": peak_response_value,
-                "all_channel_responses": rms_values,  # 返回所有通道的RMS值
-            })
+            analysis_results.append(
+                {
+                    "freq": freq,
+                    "max_response_channel": int(max_response_channel),  # 确保是整数
+                    "peak_response_value": peak_response_value,
+                    "all_channel_responses": rms_values,  # 返回所有通道的RMS值
+                }
+            )
 
         return analysis_results
