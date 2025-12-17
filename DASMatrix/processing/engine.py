@@ -1,4 +1,10 @@
-"""混合执行引擎，负责协调 Planner 和 Backends。"""
+"""混合执行引擎模块。
+
+本模块提供 DASFrame 延迟计算的核心执行引擎，负责：
+- 计算图优化（算子融合等）
+- 调度不同后端（NumPy/SciPy、Numba JIT）
+- 递归执行计算图节点
+"""
 
 from typing import Any, List, Optional
 
@@ -18,50 +24,72 @@ from .planner.optimizer import ExecutionPlanner
 
 
 class HybridEngine:
-    """混合张量执行引擎。"""
+    """混合执行引擎，协调优化器和多后端执行。
 
-    def __init__(self):
+    HybridEngine 是 DASFrame 延迟计算的核心组件，负责：
+    1. 调用 ExecutionPlanner 优化计算图
+    2. 根据节点类型调度合适的后端
+    3. 递归执行计算图并缓存中间结果
+
+    Attributes:
+        planner: 执行计划优化器
+        numba_backend: Numba JIT 后端
+    """
+
+    def __init__(self) -> None:
+        """初始化混合执行引擎。"""
         self.planner = ExecutionPlanner()
         self.numba_backend = NumbaBackend()
-        # PolarsBackend 通常需要绑定特定的 DataFrame，这里可能动态创建或管理
 
     def compute(self, graph: ComputationGraph) -> Any:
-        """执行计算图。"""
+        """执行计算图并返回结果。
 
-        # 1. 优化图 (算子融合)
+        这是引擎的主入口点，负责优化和执行整个计算图。
+
+        Args:
+            graph: 要执行的计算图
+
+        Returns:
+            Any: 计算图根节点的计算结果（通常为 NumPy 数组）
+
+        Raises:
+            ValueError: 当计算图为空时
+        """
         opt_graph = self.planner.optimize(graph)
 
         if not opt_graph.root:
             raise ValueError("Empty computation graph")
 
-        # 2. 执行 (简单递归或线性执行)
-        # 注意: 这里简化实现，假设已经线性化且单一输出
         return self._execute_node(opt_graph.root)
 
     def _execute_node(self, node: Node) -> Any:
-        """递归执行节点。"""
+        """递归执行单个节点。
+
+        根据节点类型分发到合适的后端执行。支持结果缓存以避免重复计算。
+
+        Args:
+            node: 要执行的节点
+
+        Returns:
+            Any: 节点的计算结果
+        """
         if node.computed:
             return node.result
 
-        # 先计算输入 data
-        input_data = []
+        input_data: List[Any] = []
         for inp in node.inputs:
             input_data.append(self._execute_node(inp))
 
-        result = None
+        result: Any = None
 
-        # 根据节点类型分发
         if isinstance(node, SourceNode):
             result = node.data
 
         elif isinstance(node, FusionNode):
-            # 信号域融合节点 -> Numba Backend
-            # 假设单输入 (data from prev node)
             data = input_data[0]
             result = self.numba_backend.execute(node, data)
 
         elif isinstance(node, OperationNode):
-            # 未被融合的独立节点 - 使用 NumPy/SciPy 回退
             data = input_data[0] if input_data else None
             if data is None:
                 raise ValueError(f"Input data for node {node.name} is None")

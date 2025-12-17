@@ -13,10 +13,33 @@ from ..processing.engine import HybridEngine
 
 
 class DASFrame:
-    """DAS数据处理核心类 (Hybrid Engine Version)。
+    """DAS 数据处理核心类，提供流畅的链式 API。
 
-    协调 Polars (Metadata) 和 Numba (Signal) 引擎。
-    所有操作均为 Lazy，直到调用 plot_* 或 collect。
+    DASFrame 采用延迟计算（Lazy Evaluation）模式，所有信号处理操作不会立即执行，
+    而是构建计算图，直到调用 `collect()` 或可视化方法时才真正计算。这种设计允许
+    引擎进行算子融合等优化，提高计算效率。
+
+    内部使用混合执行引擎（HybridEngine），协调 NumPy/SciPy 后端和 Numba JIT 后端。
+
+    Attributes:
+        _fs: 采样频率 (Hz)
+        _metadata: 用户自定义的元数据字典
+        _source_data: 原始数据引用
+        _graph: 计算图实例
+        _node: 当前指向的计算图节点
+        _engine: 混合执行引擎实例
+
+    Example:
+        >>> import numpy as np
+        >>> from DASMatrix import df
+        >>> data = np.random.randn(1000, 10)  # 1000 样本, 10 通道
+        >>> result = (
+        ...     df(data, fs=1000)
+        ...     .detrend()
+        ...     .bandpass(1, 100)
+        ...     .normalize()
+        ...     .collect()
+        ... )
     """
 
     def __init__(
@@ -24,22 +47,28 @@ class DASFrame:
         data: Any,
         fs: float,
         graph: Optional[ComputationGraph] = None,
-        node: Optional[Node] = None,  # 当前指向的图节点
-        **metadata,
-    ):
+        node: Optional[Node] = None,
+        **metadata: Any,
+    ) -> None:
+        """初始化 DASFrame 实例。
+
+        Args:
+            data: 输入数据，通常为形状 (n_samples, n_channels) 的 NumPy 数组
+            fs: 采样频率 (Hz)
+            graph: 计算图实例，用于链式操作传递（内部使用）
+            node: 当前指向的计算图节点（内部使用）
+            **metadata: 用户自定义的元数据，如 channel_names、units 等
+        """
         self._fs = fs
         self._metadata = metadata
-        self._source_data = data  # 保存原始数据引用
+        self._source_data = data
 
-        # 引擎初始化 (通常单例或全局)
         self._engine = HybridEngine()
 
         if graph is None:
-            # 初始创建
             self._graph = ComputationGraph.leaf(data)
             self._node = self._graph.root
         else:
-            # 链式传递
             self._graph = graph
             self._node = node
 
@@ -74,8 +103,18 @@ class DASFrame:
 
     # --- 基础操作 ---
     def collect(self) -> np.ndarray:
-        """触发计算并返回结果数据。"""
-        # 构建一个临时的执行图，以当前节点为 root
+        """触发延迟计算并返回结果数据。
+
+        这是延迟计算的终止方法。调用此方法时，计算图中的所有操作将被优化
+        并执行，返回最终的 NumPy 数组。
+
+        Returns:
+            np.ndarray: 计算后的数据数组，形状与输入相同或根据操作变化
+
+        Example:
+            >>> frame = df(data, fs=1000).bandpass(1, 100)
+            >>> result = frame.collect()  # 此时才真正执行滤波
+        """
         exec_graph = ComputationGraph(self._node)
         return self._engine.compute(exec_graph)
 
@@ -92,20 +131,53 @@ class DASFrame:
         return self._apply_signal_op("slice", t=t, x=x)
 
     # --- 时域 (Signal Domain) ---
-    def detrend(self, axis="time") -> "DASFrame":
-        """去趋势。"""
+    def detrend(self, axis: str = "time") -> "DASFrame":
+        """去趋势，移除信号的线性趋势成分。
+
+        使用最小二乘法拟合并减去线性趋势，常用于预处理步骤。
+
+        Args:
+            axis: 去趋势的方向，'time' 表示沿时间轴（默认）
+
+        Returns:
+            DASFrame: 去趋势后的新 DASFrame 实例
+        """
         return self._apply_signal_op("detrend", axis=axis)
 
-    def demean(self, axis="time") -> "DASFrame":
-        """去均值。"""
+    def demean(self, axis: str = "time") -> "DASFrame":
+        """去均值，移除信号的直流分量。
+
+        沿指定轴计算均值并减去，使信号零均值化。
+
+        Args:
+            axis: 去均值的方向，'time' 表示沿时间轴（默认）
+
+        Returns:
+            DASFrame: 去均值后的新 DASFrame 实例
+        """
         return self._apply_signal_op("demean", axis=axis)
 
     def abs(self) -> "DASFrame":
-        """绝对值。"""
+        """计算信号的绝对值。
+
+        对每个采样点取绝对值，常用于包络分析或能量计算。
+
+        Returns:
+            DASFrame: 绝对值后的新 DASFrame 实例
+        """
         return self._apply_signal_op("abs")
 
-    def scale(self, factor=1.0) -> "DASFrame":
-        """缩放。"""
+    def scale(self, factor: float = 1.0) -> "DASFrame":
+        """按指定因子缩放信号幅度。
+
+        将所有采样值乘以缩放因子。
+
+        Args:
+            factor: 缩放因子，默认为 1.0（不缩放）
+
+        Returns:
+            DASFrame: 缩放后的新 DASFrame 实例
+        """
         return self._apply_signal_op("scale", factor=factor)
 
     def normalize(self, method: str = "minmax") -> "DASFrame":
@@ -122,18 +194,65 @@ class DASFrame:
         return self._apply_signal_op("normalize", method=method)
 
     # --- 滤波器 ---
-    def bandpass(self, low, high, order=4, fs=None, design="butter") -> "DASFrame":
-        """带通滤波。"""
+    def bandpass(
+        self,
+        low: float,
+        high: float,
+        order: int = 4,
+        fs: Optional[float] = None,
+        design: str = "butter",
+    ) -> "DASFrame":
+        """带通滤波器，保留指定频率范围内的成分。
+
+        使用 Butterworth 滤波器设计，通过 SciPy 的零相位滤波（filtfilt）实现，
+        避免相位失真。
+
+        Args:
+            low: 低截止频率 (Hz)
+            high: 高截止频率 (Hz)
+            order: 滤波器阶数，默认为 4
+            fs: 采样频率 (Hz)，默认使用初始化时的采样频率
+            design: 滤波器设计类型，目前仅支持 'butter'
+
+        Returns:
+            DASFrame: 滤波后的新 DASFrame 实例
+
+        Raises:
+            ValueError: 当 low >= high 或频率超过奈奎斯特频率时
+
+        Example:
+            >>> filtered = df(data, fs=1000).bandpass(1, 100)
+        """
         return self._apply_signal_op(
             "bandpass", low=low, high=high, order=order, fs=fs or self._fs
         )
 
-    def lowpass(self, cutoff, order=4) -> "DASFrame":
-        """低通滤波。"""
+    def lowpass(self, cutoff: float, order: int = 4) -> "DASFrame":
+        """低通滤波器，移除高于截止频率的成分。
+
+        使用 Butterworth 滤波器设计，通过零相位滤波实现。
+
+        Args:
+            cutoff: 截止频率 (Hz)
+            order: 滤波器阶数，默认为 4
+
+        Returns:
+            DASFrame: 滤波后的新 DASFrame 实例
+        """
         return self._apply_signal_op("lowpass", cutoff=cutoff, order=order, fs=self._fs)
 
-    def highpass(self, cutoff, order=4) -> "DASFrame":
-        """高通滤波。"""
+    def highpass(self, cutoff: float, order: int = 4) -> "DASFrame":
+        """高通滤波器，移除低于截止频率的成分。
+
+        使用 Butterworth 滤波器设计，通过零相位滤波实现。
+
+        Args:
+            cutoff: 截止频率 (Hz)
+            order: 滤波器阶数，默认为 4
+
+        Returns:
+            DASFrame: 滤波后的新 DASFrame 实例
+        """
         return self._apply_signal_op(
             "highpass", cutoff=cutoff, order=order, fs=self._fs
         )
@@ -164,11 +283,27 @@ class DASFrame:
 
     # --- 频域 (Frequency Domain) ---
     def fft(self) -> "DASFrame":
-        """快速傅里叶变换。"""
+        """快速傅立叶变换，计算频谱幅度。
+
+        对每个通道沿时间轴进行 FFT，返回频谱幅度（绝对值）。
+
+        Returns:
+            DASFrame: 包含频谱幅度的新 DASFrame 实例
+        """
         return self._apply_signal_op("fft")
 
-    def stft(self, nperseg=256, noverlap=None) -> "DASFrame":
-        """短时傅里叶变换。"""
+    def stft(self, nperseg: int = 256, noverlap: Optional[int] = None) -> "DASFrame":
+        """短时傅立叶变换，进行时频分析。
+
+        将信号分割成重叠的窗口并对每个窗口进行 FFT，获得时频谱表示。
+
+        Args:
+            nperseg: 每个窗口的采样点数，默认为 256
+            noverlap: 窗口重叠点数，默认为 nperseg // 2
+
+        Returns:
+            DASFrame: 包含时频谱的新 DASFrame 实例
+        """
         if noverlap is None:
             noverlap = nperseg // 2
         return self._apply_signal_op(
@@ -184,67 +319,96 @@ class DASFrame:
         return self._apply_signal_op("hilbert")
 
     def envelope(self) -> "DASFrame":
-        """希尔伯特变换提取包络。"""
+        """提取信号包络。
+
+        通过希尔伯特变换计算解析信号，并取其绝对值作为包络。
+        包络表示信号的瞬时幅度变化。
+
+        Returns:
+            DASFrame: 包含包络的新 DASFrame 实例
+        """
         return self._apply_signal_op("envelope")
 
     # --- 统计 (Statistics) ---
-    def mean(self, axis=0):
+    def mean(self, axis: Optional[int] = 0) -> np.ndarray:
         """计算均值。
 
         Args:
-            axis: 计算轴，默认 0 返回每通道的均值，None 返回全局标量
+            axis: 计算轴，0 表示沿时间轴返回每通道的均值，None 返回全局标量
+
+        Returns:
+            np.ndarray: 均值结果
         """
         data = self.collect()
         return np.mean(data, axis=axis)
 
-    def std(self, axis=0):
+    def std(self, axis: Optional[int] = 0) -> np.ndarray:
         """计算标准差。
 
         Args:
-            axis: 计算轴，默认 0 返回每通道的标准差，None 返回全局标量
+            axis: 计算轴，0 表示沿时间轴返回每通道的标准差，None 返回全局标量
+
+        Returns:
+            np.ndarray: 标准差结果
         """
         data = self.collect()
         return np.std(data, axis=axis)
 
-    def max(self, axis=0):
+    def max(self, axis: Optional[int] = 0) -> np.ndarray:
         """计算最大值。
 
         Args:
-            axis: 计算轴，默认 0 返回每通道的最大值，None 返回全局标量
+            axis: 计算轴，0 表示沿时间轴返回每通道的最大值，None 返回全局标量
+
+        Returns:
+            np.ndarray: 最大值结果
         """
         data = self.collect()
         return np.max(data, axis=axis)
 
-    def min(self, axis=0):
+    def min(self, axis: Optional[int] = 0) -> np.ndarray:
         """计算最小值。
 
         Args:
-            axis: 计算轴，默认 0 返回每通道的最小值，None 返回全局标量
+            axis: 计算轴，0 表示沿时间轴返回每通道的最小值，None 返回全局标量
+
+        Returns:
+            np.ndarray: 最小值结果
         """
         data = self.collect()
         return np.min(data, axis=axis)
 
-    def rms(self, window=None):
-        """计算 RMS（均方根）。"""
+    def rms(self, window: Optional[int] = None) -> np.ndarray:
+        """计算 RMS（均方根）。
+
+        Args:
+            window: 滑动窗口大小，默认为 None 表示计算全局 RMS
+
+        Returns:
+            np.ndarray: RMS 结果，如指定 window 则返回滑动 RMS
+        """
         data = self.collect()
         if window is None:
             return np.sqrt(np.mean(data**2, axis=0))
         else:
-            # 滑动窗口 RMS
             from scipy.ndimage import uniform_filter1d
-
             return np.sqrt(uniform_filter1d(data**2, size=window, axis=0))
 
     # --- 检测 (Detection) ---
-    def threshold_detect(self, threshold=None, sigma=3.0):
-        """阈值检测。
+    def threshold_detect(
+        self, threshold: Optional[float] = None, sigma: float = 3.0
+    ) -> np.ndarray:
+        """阈值检测，检测超过阈值的采样点。
 
         Args:
-            threshold: 自定义阈值，如果为 None 则使用 mean + sigma * std
-            sigma: 标准差倍数
+            threshold: 自定义阈值，默认为 None 表示使用 mean + sigma * std
+            sigma: 标准差倍数，用于自动计算阈值
 
         Returns:
-            检测结果矩阵 (bool)
+            np.ndarray: 布尔矩阵，True 表示该点超过阈值
+
+        Example:
+            >>> detections = df(data, fs=1000).threshold_detect(sigma=3.0)
         """
         data = self.collect()
         if threshold is None:

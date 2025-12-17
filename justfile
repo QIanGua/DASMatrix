@@ -22,6 +22,18 @@ typecheck:
 
 # Clean build artifacts
 clean:
-    rm -rf dist build .pytest_cache .ruff_cache
+    rm -rf dist build .pytest_cache .ruff_cache site
     find . -type d -name "__pycache__" -exec rm -rf {} +
     find . -type d -name "*.egg-info" -exec rm -rf {} +
+
+# Build documentation
+docs:
+    uv run mkdocs build
+
+# Serve documentation locally with hot-reload
+docs-serve:
+    uv run mkdocs serve
+
+# Deploy docs to GitHub Pages
+docs-deploy:
+    uv run mkdocs gh-deploy
