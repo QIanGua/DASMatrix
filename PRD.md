@@ -6,20 +6,21 @@
 
 ## 1. 框架设计核心理念
 
-1. **性能优先**：针对DAS大数据量特点优化核心算法和数据结构，支持GB～TB级数据的毫秒级操作
-2. **简单易用**：提供类似data.table的极简DSL语法，一行链式表达可完成筛选/变换/聚合操作
-3. **可扩展性**：保持接口一致性和松耦合设计，支持插拔式算法、流式或分布式处理
-4. **渐进式复杂度**：支持从简单到复杂的使用方式，满足不同用户需求
-5. **易部署**：纯Python主体，可选C/CUDA扩展，支持简单pip安装
+1. **性能优先 (Performance First)**：不仅仅是"快"，而是追求**硬件极限**。通过零拷贝 (Zero-Copy) 和算子融合 (Kernel Fusion) 最小化内存带宽占用。
+2. **张量原生 (Tensor-Native)**：认识到 DAS 数据本质是时空矩阵 (Tensor)，而非简单的表格。核心计算采用 SIMD/GPU 加速的矩阵运算。
+3. **极简易用 (Simplicity)**：保持 `data.table` 般的极简 DSL，但在底层自动将 Python 代码编译为高性能机器码。
+4. **混合引擎 (Hybrid Engine)**：元数据用 Polars 管理，信号矩阵用 Numba/CuPy 处理，取长补短。
+5. **渐进式复杂度**：从单机内存处理无缝扩展到 Zarr/HDF5 核外计算 (Out-of-Core) 和分布式集群。
 
 ## 2. 核心诉求与技术落点
 
 | 诉求 | 解释 | 技术落点 |
 |---|---|---|
-| 极简语法 | 一行链式表达完成筛选/变换/聚合 | DASFrame对象 + DSL |
-| 高性能 | GB～TB 级数据毫秒级操作 | 零拷贝列式存储、SIMD/Numba/Polars |
-| 扩展性 | 插拔式算法、流式或分布式 | Pipeline + Lazy 计算图 |
-| 易部署 | `pip install dasmatrix` | 纯 Python + 可选 C/CUDA 扩展 |
+| 极简语法 | 一行链式表达完成筛选/变换/聚合 | DASFrame 对象 + Lazy DSL |
+| **极致性能** | 饱和内存带宽，利用多核/GPU | **Polars (Meta) + Numba/CuPy (Signal) + Kernel Fusion** |
+| 存储优化 | TB 级数据的秒级访问与切片 | **Zarr (Chunked Store) + Parquet (Metadata)** |
+| 扩展性 | 插拔式算法、流式或分布式 | Execution Planner + JIT Compilation |
+| 易部署 | `pip install dasmatrix` | 核心纯 Python，可选 CUDA 扩展包 |
 
 ## 3. 专为DAS优化的核心算子与语法设计
 
@@ -221,42 +222,23 @@ DASMatrix/
 │   │   ├── interfaces/            # 接口定义
 │   │   │   ├── __init__.py
 │   │   │   ├── filter.py          # 滤波器接口
-│   │   │   ├── backend.py         # 计算后端接口（新增）
-│   │   │   └── feature_extractor.py # 特征提取器接口
-│   │   ├── filters/               # 滤波器实现
+│   │   │   ├── backend.py         # 计算后端接口
+│   │   │   └── kernel.py          # 融合算子内核接口（新增）
+│   │   ├── filters/               # 高层滤波器封装
+│   │   │   ├── ...
+│   │   ├── planner/               # 执行计划器（新增）
 │   │   │   ├── __init__.py
-│   │   │   ├── high_pass_filter.py # 高通滤波器
-│   │   │   ├── low_pass_filter.py  # 低通滤波器
-│   │   │   ├── band_pass_filter.py # 带通滤波器
-│   │   │   ├── median_filter.py    # 中值滤波器
-│   │   │   └── adaptive_filter.py  # 自适应滤波器
-│   │   ├── transforms/            # 信号变换
+│   │   │   ├── optimizer.py       # 计算图优化器（算子融合）
+│   │   │   └── compiler.py        # JIT编译器接口
+│   │   ├── kernels/               # 低级计算内核（新增）
+│   │   │   ├── cpu/               # Numba/SIMD 内核
+│   │   │   └── gpu/               # CUDA/CuPy 内核
+│   │   ├── backends/              # 计算后端实现
 │   │   │   ├── __init__.py
-│   │   │   ├── fft_transform.py    # 快速傅里叶变换
-│   │   │   ├── wavelet_transform.py # 小波变换
-│   │   │   └── hilbert_transform.py # 希尔伯特变换
-│   │   ├── feature_extractors/    # 特征提取器
-│   │   │   ├── __init__.py
-│   │   │   ├── statistical_features.py # 统计特征
-│   │   │   ├── spectral_features.py # 频谱特征
-│   │   │   └── wavelet_features.py # 小波特征
-│   │   ├── processors/            # 数据处理器
-│   │   │   ├── __init__.py
-│   │   │   ├── base_processor.py  # 基础处理器
-│   │   │   └── enhanced_processor.py # 增强处理器
-│   │   ├── backends/              # 计算后端实现（新增）
-│   │   │   ├── __init__.py
-│   │   │   ├── python_backend.py  # 纯Python后端
-│   │   │   ├── polars_backend.py  # Polars后端
-│   │   │   ├── numba_backend.py   # Numba JIT后端
-│   │   │   └── cuda_backend.py    # CUDA GPU后端
-│   │   ├── optimized/             # 优化实现
-│   │   │   ├── __init__.py
-│   │   │   ├── numba_filters.py   # Numba优化滤波器 
-│   │   │   └── vectorized_ops.py  # 向量化操作
-│   │   ├── pipeline.py            # 处理管道
-│   │   ├── parallel_processor.py  # 并行处理器
-│   │   ├── lazy_processor.py      # 延迟计算处理器
+│   │   │   ├── numpy_backend.py   # 基础后端
+│   │   │   ├── numba_backend.py   # 高性能CPU后端
+│   │   │   └── cupy_backend.py    # GPU后端
+│   │   ├── engine.py              # 混合执行引擎
 │   │   └── stream_processor.py    # 流处理器
 │   │
 │   ├── analysis/                  # 分析层
@@ -512,60 +494,83 @@ DASMatrix/
 
 ## 5. 新增和改进的关键部分
 
-### 5.1 DASFrame核心列式对象
+## 5. 新增和改进的关键部分
 
-新增`api/dasframe.py`模块，提供类似data.table的列式对象抽象：
+### 5.1 Hybrid Tensor Engine (混合张量引擎)
 
-- **零拷贝列存储**：基于Arrow/Polars实现高效内存表示
-- **链式操作API**：filter/mutate/agg/slice等基本操作，每次返回新DASFrame
-- **DSL语法支持**：支持表达式评估和字符串查询解析
-- **自动内存管理**：基于数据规模自动选择内存/mmap/分块策略
+这是实现极致性能的核心。我们将数据分为两类，分别使用最适合的工具处理：
 
-### 5.2 计算图与多后端架构
+- **Metadata Frame (元数据表)**: 使用 **Polars**。管理 Channel ID, Distance, 属性, 事件日志等。Polars 的查询优化器极其适合这类过滤和 Join 操作。
+- **Signal Matrix (信号矩阵)**: 使用 **Numba (CPU) / CuPy (GPU)**。处理实际的一维/二维信号数据。
 
-- **计算图抽象**：所有DASFrame操作构建Lazy计算图
-- **多后端注册系统**：支持Python-Native/Polars/Numba/CUDA多种后端
-- **后端自动选择**：根据操作类型和数据规模自动选择最优后端
-- **算子注册机制**：允许第三方扩展注册自定义算子和后端
+`DASFrame` 对象作为协调者，对外提供统一 API，对内自动调度这两个引擎。
 
-### 5.3 高性能引擎与优化
+### 5.2 JIT Compilation & Kernel Fusion (JIT 编译与算子融合)
 
-- **Polars/Arrow集成**：利用现代列存引擎和SIMD指令集加速
-- **Numba JIT编译**：对性能关键路径应用即时编译
-- **内存分级管理**：<2GB内存处理、>2GB自动mmap、>20GB分块+外排
-- **向量化与并行化**：自动向量化和线程级并行处理
+为了避免 Python 循环和 NumPy 产生的大量中间内存分配（Memory Traffic 是高性能计算的最大瓶颈），我们引入 **Execution Planner**：
 
-### 5.4 高级DSL与快捷入口
+1. **Lazy Graph**: 所有 DSL 操作（如 `.detrend().filter().abs()`）首先构建逻辑图。
+2. **Fusion**: 编译器识别出可以融合的操作序列。例如 `detrend + filter + abs` 可以被融合为一个 Loop。
+3. **Codegen**: 使用 **Numba** 将融合后的 Loop 动态编译为机器码 (LLVM)，一次遍历内存完成所有计算。
+4. **Parallel**: 自动将编译后的 Kernel 调度到多核 CPU 或 GPU 上执行。
 
-- **df函数式API**：类似Pandas的函数式操作接口
-- **q迷你DSL**：快捷字符串查询解析器，支持.dql脚本
-- **语法解析器**：将字符串表达式转换为高效计算节点
+### 5.3 Zarr + Parquet 存储架构
 
-### 5.5 分布式计算支持
+- **Zarr**: 用于存储主要的 Signal Matrix。支持 N 维分块 (Chunking) 和多种压缩算法 (Blosc, LZ4)。支持并发读写，非常适合 DAS 这种 Time x Channel 的大矩阵。
+- **Parquet**: 用于存储 Metadata Frame。列式存储，查询极快。
 
-- **Ray Dataset集成**：支持分布式数据处理
-- **Polars Streaming**：支持流式大数据处理
-- **分片与调度策略**：自动数据分片和任务调度
+### 5.4 分布式与核外计算 (Out-of-Core)
 
-## 6. 性能基线要求与实现
+对于超大内存的数据集，引擎自动切换到 **Chunked Mode**：
 
-### 6.1 性能目标
+- 利用 `dask` 或自定义调度器，按 Chunk 流式处理 Zarr 数据。
+- 保证内存占用恒定，不随数据量增加而 OOM。
 
-| 场景 | 数据规模 | 目标 | 技术路标 |
+## 6. 性能基线与优化策略
+
+### 6.1 性能目标 (硬件级极限)
+
+| 场景 | 数据规模 | 目标 | 衡量标准 |
 |---|---|---|---|
-| 单机内存 | 128 M samples × 1024 ch ≈ 1 TB | 滤波 + FFT < 10 s | Polars Lazy → ThreadPool → SIMD |
-| 流式实时 | 50 kSps × 2 k ch | 延迟 ≤ 100 ms | mmap ring buffer + Numba JIT |
-| 分布式 | 10 TB 历史回放 | 1 h 内完成全链 | Ray Dataset + Parquet 分片 |
+| **带宽饱和** | 内存处理 | **> 20 GB/s** (DDR4/5 带宽的 60%+) | Kernel Fusion 减少 90% 内存读写 |
+| **实时延迟** | 50 kSps × 2 k ch | < 50 ms (End-to-End) | 零重分配 (Zero-Allocation) Ring Buffer |
+| **交互式可视** | 1 TB 数据集 | < 1 s (Heatmap Render) | 多级分辨率索引 (Multi-scale Indexing) |
 
-### 6.2 关键算子实现策略
+### 6.2 关键性能优化技术
 
-| 算子类型 | 技术实现 |
-|---|---|
-| FIR/IIR 滤波 | SciPy SOS → Numba vectorized → FFT-convolution（大窗口）|
-| FFT/STFT | 1) `pyFFTW` 2) `cupy.fft` 3) Polars `expr.fft()`（批量列）|
-| Wavelet | `pywt` + 线程池 / GPU optional |
-| Beamforming | Numba JIT + SIMD；>1 TB 场景切分 + Ray Map |
-| 实时处理 | ring-buffer + lock-free 写，消费端基于 `stream_processor` |
+#### 6.2.1 算子融合 (Operator Fusion)
+
+传统 NumPy 写法：
+
+```python
+x = x - np.mean(x)  # Allocation 1
+x = signal.filtfilt(b, a, x) # Allocation 2 (huge)
+x = np.abs(x) # Allocation 3
+```
+
+DASMatrix Numba 融合写法 (自动生成)：
+
+```python
+@numba.jit(nopython=True, parallel=True)
+def fused_kernel(x, out):
+    # 单次循环完成所有操作，寄存器内计算，无中间内存写入
+    for i in prange(x.shape[0]):
+        val = x[i] - mean
+        val = filter_step(val)
+        out[i] = abs(val) 
+```
+
+#### 6.2.2 显式 SIMD 指令
+
+利用 Numba 的 `vectorize` 和 `guvectorize`，显式通过 LLVM 使用 AVX-2 / AVX-512 指令集处理 FFT 和滤波。
+
+#### 6.2.3 零拷贝视图
+
+在切片、重塑等操作中，严格保证不复制数据，仅传递指针和步长 (Strides)。
+
+#### 6.2.4 GPU 加速 (CuPy)
+
+对于 FFT、2D 卷积等计算密集型任务，自动调度数据到 GPU 显存（如果可用），利用 CUDA Core 的海量并行能力。
 
 ## 7. 实现策略与里程碑
 

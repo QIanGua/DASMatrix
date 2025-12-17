@@ -163,31 +163,31 @@ class TestDASFrameStatistics:
 
     def test_mean(self, sample_frame):
         """测试均值计算"""
-        result = sample_frame.mean().collect()
+        result = sample_frame.mean()
 
         assert isinstance(result, (np.ndarray, float))
 
     def test_std(self, sample_frame):
         """测试标准差计算"""
-        result = sample_frame.std().collect()
+        result = sample_frame.std()
 
         assert isinstance(result, (np.ndarray, float))
 
     def test_max(self, sample_frame):
         """测试最大值"""
-        result = sample_frame.max().collect()
+        result = sample_frame.max()
 
         assert isinstance(result, (np.ndarray, float))
 
     def test_min(self, sample_frame):
         """测试最小值"""
-        result = sample_frame.min().collect()
+        result = sample_frame.min()
 
         assert isinstance(result, (np.ndarray, float))
 
     def test_rms(self, sample_frame):
         """测试 RMS 计算"""
-        result = sample_frame.rms(window=100).collect()
+        result = sample_frame.rms(window=100)
 
         # RMS 计算结果应该有有效值
         assert result is not None
@@ -242,7 +242,7 @@ class TestDASFrameDetection:
         data[500:510, :] = 10.0  # 添加突发事件
 
         frame = DASFrame(data, fs=1000)
-        result = frame.threshold_detect().collect()
+        result = frame.threshold_detect()
 
         # 应该检测到事件
         assert result.any()
