@@ -2,13 +2,13 @@
 
 import os
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Optional
 
 import h5py
 import numpy as np
 
-from ..config.sampling_config import SamplingConfig
 from ..acquisition.das_reader import DASReader, DataType
+from ..config.sampling_config import SamplingConfig
 
 
 # 避免循环导入
@@ -54,7 +54,9 @@ def read(
             raise ValueError(
                 "读取 DAT 文件需要指定 fs（采样频率）和 channels（通道数）参数"
             )
-        return _read_dat(path, fs=fs, channels=channels, byte_order=byte_order, **kwargs)
+        return _read_dat(
+            path, fs=fs, channels=channels, byte_order=byte_order, **kwargs
+        )
     else:
         raise ValueError(f"不支持的文件类型: {ext}")
 
@@ -82,7 +84,10 @@ def _read_h5(path: str, fs: Optional[float] = None, **kwargs):
                     try:
                         # 尝试读取采样率属性或数据
                         fs_data = f[fs_path]
-                        if hasattr(fs_data, "attrs") and "SamplingFrequency" in fs_data.attrs:
+                        if (
+                            hasattr(fs_data, "attrs")
+                            and "SamplingFrequency" in fs_data.attrs
+                        ):
                             detected_fs = float(fs_data.attrs["SamplingFrequency"])
                             break
                         elif isinstance(fs_data, h5py.Dataset):

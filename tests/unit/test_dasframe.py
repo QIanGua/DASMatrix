@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from DASMatrix.api.dasframe import DASFrame
 from DASMatrix.api import df
+from DASMatrix.api.dasframe import DASFrame
 
 
 class TestDASFrameCreation:
@@ -84,7 +84,11 @@ class TestDASFrameFiltering:
         """创建包含多频率成分的测试数据"""
         t = np.linspace(0, 1, 10000)
         # 50Hz + 150Hz + 300Hz
-        data = np.sin(2 * np.pi * 50 * t) + 0.5 * np.sin(2 * np.pi * 150 * t) + 0.3 * np.sin(2 * np.pi * 300 * t)
+        data = (
+            np.sin(2 * np.pi * 50 * t)
+            + 0.5 * np.sin(2 * np.pi * 150 * t)
+            + 0.3 * np.sin(2 * np.pi * 300 * t)
+        )
         data = data.reshape(-1, 1)
         return DASFrame(data, fs=10000)
 
@@ -205,13 +209,7 @@ class TestDASFrameChaining:
         frame = DASFrame(data, fs=10000)
 
         # 链式操作
-        result = (
-            frame
-            .detrend()
-            .bandpass(low=10, high=100)
-            .normalize()
-            .collect()
-        )
+        result = frame.detrend().bandpass(low=10, high=100).normalize().collect()
 
         assert result.shape == data.shape
 
@@ -222,13 +220,7 @@ class TestDASFrameChaining:
 
         frame = DASFrame(data, fs=4096)
 
-        result = (
-            frame
-            .detrend()
-            .bandpass(low=10, high=100)
-            .stft(nperseg=256)
-            .collect()
-        )
+        result = frame.detrend().bandpass(low=10, high=100).stft(nperseg=256).collect()
 
         assert result.ndim == 3
 

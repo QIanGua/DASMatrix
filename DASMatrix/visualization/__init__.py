@@ -6,22 +6,22 @@
 from .das_visualizer import (
     DASVisualizer,
     PlotBase,
-    SpectrumPlot,
     SpectrogramPlot,
-    WaveformPlot,
+    SpectrumPlot,
     WaterfallPlot,
+    WaveformPlot,
 )
 from .styles import (
-    apply_nature_style,
-    create_figure,
-    nature_style,
-    save_figure,
-    setup_axis,
     add_colorbar,
     add_panel_label,
     add_scalebar,
     add_significance_bracket,
+    apply_nature_style,
+    create_figure,
     get_colors,
+    nature_style,
+    save_figure,
+    setup_axis,
 )
 
 __all__ = [

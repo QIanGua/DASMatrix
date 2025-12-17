@@ -106,11 +106,11 @@ class DATReader(DataReader):
                 ).reshape((row_count, self.sampling_config.channels))
 
             # 转换为物理量
-            raw_data = (raw_data * np.pi) / 2**13
+            raw_data = (raw_data * np.pi) / 2**13  # type: ignore
 
             # 如果提供了target_col，只选择指定列
             if target_col is not None:
-                raw_data = raw_data[:, target_col]
+                raw_data = raw_data[:, target_col]  # type: ignore
 
             return raw_data
         except Exception as e:
@@ -143,7 +143,7 @@ class H5Reader(DataReader):
                 raw_data = f["Acquisition/Raw[0]"][:] / 4
 
             # 转换为物理量
-            raw_data = (raw_data * np.pi) / 2**13
+            raw_data = (raw_data * np.pi) / 2**13  # type: ignore
 
             # 如果提供了target_col，只选择指定列
             if target_col is not None:
@@ -168,14 +168,15 @@ class DASReader:
             data_type: 数据类型，默认为DAT格式
         """
         self.sampling_config = sampling_config
+        self.reader: DataReader
         self.data_type = data_type
         self.logger = logging.getLogger(__name__)
 
         # 根据数据类型选择合适的读取器
         if data_type == DataType.DAT:
-            self.reader: DataReader = DATReader(sampling_config)
+            self.reader = DATReader(sampling_config)
         elif data_type == DataType.H5:
-            self.reader: DataReader = H5Reader(sampling_config)
+            self.reader = H5Reader(sampling_config)
         else:
             raise ValueError(f"不支持的数据类型: {data_type}")
 

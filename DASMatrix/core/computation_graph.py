@@ -2,14 +2,15 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class NodeDomain(Enum):
     """节点计算域定义"""
+
     GENERIC = "generic"
     METADATA = "metadata"  # Polars 域
-    SIGNAL = "signal"      # Numba/CuPy 域
+    SIGNAL = "signal"  # Numba/CuPy 域
 
 
 class Node(ABC):
@@ -38,7 +39,9 @@ class Node(ABC):
 class SourceNode(Node):
     """数据源节点。"""
 
-    def __init__(self, data: Any, name: str = "source", domain: NodeDomain = NodeDomain.GENERIC):
+    def __init__(
+        self, data: Any, name: str = "source", domain: NodeDomain = NodeDomain.GENERIC
+    ):
         super().__init__(name, domain)
         self.data = data
 
@@ -52,10 +55,10 @@ class OperationNode(Node):
 
     def __init__(
         self,
-        operation: str, # 操作名称，如 'detrend'
+        operation: str,  # 操作名称，如 'detrend'
         inputs: List[Node],
         args: Tuple = (),
-        kwargs: Dict[str, Any] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
         domain: NodeDomain = NodeDomain.GENERIC,
         name: str = "operation",
     ):
@@ -71,7 +74,9 @@ class OperationNode(Node):
         应该由 ExecutionPlanner 生成执行计划后，由 Backend 执行。
         这里保留是为了兼容性或调试。
         """
-        raise NotImplementedError("OperationNode should be executed by a Backend/Planner")
+        raise NotImplementedError(
+            "OperationNode should be executed by a Backend/Planner"
+        )
 
 
 class FusionNode(Node):
@@ -85,7 +90,9 @@ class FusionNode(Node):
             self.inputs = nodes[0].inputs
 
     def compute(self, backend: Any = None) -> Any:
-        raise NotImplementedError("FusionNode must be compiled and executed by NumbaBackend")
+        raise NotImplementedError(
+            "FusionNode must be compiled and executed by NumbaBackend"
+        )
 
 
 class ComputationGraph:
@@ -99,7 +106,7 @@ class ComputationGraph:
         """创建只包含一个数据源节点的计算图。"""
         source = SourceNode(data)
         return cls(source)
-        
+
     def add_node(self, node: Node) -> "ComputationGraph":
         """返回一个新的图实例，指向新的根节点（不可变风格）"""
         return ComputationGraph(node)
@@ -109,7 +116,7 @@ class ComputationGraph:
         """简单的 BFS 获取所有节点（用于调试或简单遍历）"""
         if not self.root:
             return []
-        
+
         # 简单实现，仅用于演示。实际可能需要拓扑排序。
         visited = set()
         stack = [self.root]
@@ -120,4 +127,4 @@ class ComputationGraph:
                 visited.add(node)
                 result.append(node)
                 stack.extend(node.inputs)
-        return list(reversed(result)) # 拓扑序近似
+        return list(reversed(result))  # 拓扑序近似

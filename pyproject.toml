@@ -26,6 +26,7 @@ dependencies = [
     "zarr>=2.16.0",
     "pyarrow>=15.0.0",
     "pytest>=7.0.0",
+    "mypy>=1.19.1",
 ]
 
 [tool.setuptools]
@@ -44,3 +45,18 @@ quote-style = "double"
 dev = [
     "ipykernel>=6.31.0",
 ]
+
+[tool.mypy]
+no_implicit_optional = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "scipy.*",
+    "numba.*",
+    "h5py.*",
+    "seaborn.*",
+    "mpl_toolkits.*",
+    "pyarrow.*"
+]
+ignore_missing_imports = true

@@ -472,7 +472,13 @@ class WaveformPlot(PlotBase):
         # 添加高亮区域（如果有）- 只有在确实需要时才执行
         if highlight_regions:
             for i, (start, end) in enumerate(highlight_regions):
-                ax.axvspan(start, end, alpha=0.2, color=plt.cm.tab10(i % 10), zorder=2)
+                ax.axvspan(
+                    start,
+                    end,
+                    alpha=0.2,
+                    color=plt.cm.get_cmap("tab10")(i % 10),
+                    zorder=2,
+                )
                 # 添加区域标签
                 mid_point = (start + end) / 2
                 ax.annotate(
@@ -753,8 +759,8 @@ class WaterfallPlot(PlotBase):
         im = ax.imshow(
             data,
             cmap=cmap,
-            aspect=aspect,
-            origin=origin,
+            aspect=aspect,  # type: ignore
+            origin=origin,  # type: ignore
             interpolation="none",  # 禁用插值以保持原始数据的清晰度
             vmin=vmin,
             vmax=vmax,
