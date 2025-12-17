@@ -6,6 +6,8 @@ DASMatrix 支持多种 DAS 数据格式的读取。
 
 - **DAT** - 二进制 DAT 文件
 - **HDF5** - HDF5 格式文件
+- **SEGY** - SEG-Y 地震数据文件
+- **MiniSEED** - MiniSEED 地震记录文件
 
 ## 快速使用
 
@@ -40,3 +42,11 @@ data = reader.ReadRawData("path/to/file.h5")
 ### SamplingConfig
 
 ::: DASMatrix.config.SamplingConfig
+
+### SEGYReader
+
+::: DASMatrix.acquisition.das_reader.SEGYReader
+
+### MiniSEEDReader
+
+::: DASMatrix.acquisition.das_reader.MiniSEEDReader

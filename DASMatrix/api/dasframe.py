@@ -281,6 +281,28 @@ class DASFrame:
         """
         return self._apply_signal_op("median_filter", k=k, axis=axis)
 
+    def fk_filter(
+        self,
+        v_min: Optional[float] = None,
+        v_max: Optional[float] = None,
+        dx: float = 1.0,
+    ) -> "DASFrame":
+        """F-K 滤波 (速度滤波)。
+
+        在频率-波数域中应用滤波，基于视速度分离波场。
+
+        Args:
+            v_min: 最小保留视速度 (m/s)
+            v_max: 最大保留视速度 (m/s)
+            dx: 通道间距 (m)，默认 1.0
+
+        Returns:
+            DASFrame: 滤波后的新 DASFrame
+        """
+        return self._apply_signal_op(
+            "fk_filter", v_min=v_min, v_max=v_max, dx=dx, fs=self._fs
+        )
+
     # --- 频域 (Frequency Domain) ---
     def fft(self) -> "DASFrame":
         """快速傅立叶变换，计算频谱幅度。
@@ -512,4 +534,69 @@ class DASFrame:
         ax.set_ylabel("Frequency (Hz)")
         ax.set_xlabel("Time (s)")
         ax.set_title(title)
+        return fig
+
+    def plot_fk(
+        self,
+        dx: float = 1.0,
+        title: str = "F-K Spectrum",
+        v_lines: Optional[List[float]] = None,
+        ax: Optional[plt.Axes] = None,
+        **kwargs: Any,
+    ) -> plt.Figure:
+        """绘制 F-K 谱图 (Frequency-Wavenumber Spectrum)。
+
+        Args:
+            dx: 空间采样间隔 (m)
+            title: 图表标题
+            v_lines: 待标记的速度线列表 (m/s)，如 [1500, 3000]
+            ax: Matplotlib Axes 对象 (可选)
+            **kwargs: dict[str, Any] 传递给绘图函数的其他参数
+
+        Returns:
+            plt.Figure: Matplotlib 图形对象
+        """
+        # 为了绘图，我们需要先获取数据并计算 FK 变换
+        # 注意：这里我们立即执行计算，而不是作为计算图的一部分
+        # 因为可视化通常是终端操作
+        data = self.collect()
+        
+        # 使用 Processor 计算 FK
+        # 临时创建一个 Processor 实例，或者逻辑可以复用
+        # 这里为了方便直接使用 scipy/numpy，或者复用 das_processor
+        # 鉴于 das_processor 逻辑较多，且我们在 frame 里没有 direct access to processor instance
+        # 但我们之前实现了 engine 的 logic。
+        # 这里我们在 collect() 后得到 numpy array，可以直接使用 das_processor
+        
+        from ..processing.das_processor import DASProcessor
+        from ..config.sampling_config import SamplingConfig
+        
+        # 临时配置
+        config = SamplingConfig(fs=self._fs, channels=data.shape[1])
+        processor = DASProcessor(config)
+        
+        fk, freqs, k = processor.f_k_transform(data)
+        
+        # 调整 k 轴
+        k = k / dx
+        
+        # 调用 Visualizer
+        # DASFrame 目前还没有 direct access to visualizer instance
+        # 我们按需实例化
+        from ..visualization.das_visualizer import FKPlot
+        
+        plotter = FKPlot()
+        # 注意：plotter.plot 返回 figure。如果提供了 ax，我们需要适配
+        # 目前 FKPlot.plot 创建新 figure。我们需要修改它支持 ax，或者直接在这里处理
+        # 考虑到时间，我们使用 visualizer 默认行为
+        
+        fig = plotter.plot(
+            fk, 
+            freqs, 
+            k, 
+            title=title, 
+            v_lines=v_lines, 
+            **kwargs
+        )
+        
         return fig

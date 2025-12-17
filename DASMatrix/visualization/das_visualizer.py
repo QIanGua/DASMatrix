@@ -1230,3 +1230,99 @@ class DASVisualizer:
 
         # 处理图形显示，避免双重显示
         return self._handle_figure_display(fig)
+
+class FKPlot(PlotBase):
+    """F-K 谱图 (F-K Spectrum Plot) 绘图类"""
+
+    def plot(
+        self,
+        fk_spectrum: np.ndarray,
+        freqs: np.ndarray,
+        wavenumbers: np.ndarray,
+        title: Optional[str] = None,
+        cmap: str = "turbo",
+        db_range: Optional[Tuple[float, float]] = None,
+        v_lines: Optional[List[float]] = None,
+    ) -> Any:
+        """绘制 F-K 谱图
+
+        Args:
+            fk_spectrum: FK 谱 (complex)
+            freqs: 频率轴
+            wavenumbers: 波数轴
+            title: 标题
+            cmap: 色彩映射
+            db_range: 显示范围 (min_db, max_db)
+            v_lines: 待标记的速度线 (m/s)
+
+        Returns:
+            Figure: matplotlib 图形对象
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib.colors as colors
+
+        fig, ax = plt.subplots(figsize=self.config.figsize_standard)
+
+        # 计算幅度谱 (dB)
+        mag = np.abs(fk_spectrum)
+        mag_db = 20 * np.log10(mag + 1e-12)
+        
+        # 归一化 dB
+        mag_db = mag_db - np.max(mag_db)
+
+        # 确定显示范围
+        if db_range:
+            vmin, vmax = db_range
+        else:
+            vmax = 0
+            vmin = -60  # 默认显示前 60dB
+
+        # 绘制
+        # 使用 pcolormesh 或 imshow
+        # 注意：imshow 需要 origin='lower' 且 extent 正确
+        extent = [wavenumbers[0], wavenumbers[-1], freqs[0], freqs[-1]]
+        
+        im = ax.imshow(
+            mag_db,
+            extent=extent,
+            origin='lower',
+            aspect='auto',
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation='nearest'
+        )
+        
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_label("Amplitude (dB)")
+        
+        ax.set_xlabel("Wavenumber (1/m)")
+        ax.set_ylabel("Frequency (Hz)")
+        
+        if title:
+            ax.set_title(title, fontweight="bold")
+        else:
+            ax.set_title("F-K Spectrum", fontweight="bold")
+            
+        # 绘制速度线 f = v * k
+        if v_lines:
+            k_min, k_max = wavenumbers[0], wavenumbers[-1]
+            f_min, f_max = freqs[0], freqs[-1]
+            
+            k_line = np.linspace(k_min, k_max, 100)
+            
+            for v in v_lines:
+                f_line = v * k_line
+                
+                # 只绘制在频率范围内的部分
+                mask = (f_line >= f_min) & (f_line <= f_max)
+                if np.any(mask):
+                    ax.plot(k_line[mask], f_line[mask], 'w--', alpha=0.7, linewidth=1)
+                    # 标注速度
+                    # 找一个合适的位置标注
+                    idx = len(k_line) // 2
+                    if mask[idx]:
+                        ax.text(k_line[idx], f_line[idx], f"{v} m/s", color='white', fontsize=8)
+
+        fig.tight_layout()
+        return fig

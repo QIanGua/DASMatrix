@@ -7,6 +7,7 @@ from typing import Optional
 
 import h5py
 import numpy as np
+import obspy
 
 # 从DASMatrix.config导入配置类
 from ..config.sampling_config import SamplingConfig
@@ -17,6 +18,8 @@ class DataType(Enum):
 
     DAT = auto()  # DAT文件格式
     H5 = auto()  # HDF5文件格式
+    SEGY = auto()  # SEG-Y地震数据格式
+    MINISEED = auto()  # MiniSEED地震数据格式
 
 
 class DataReader(ABC):
@@ -155,6 +158,88 @@ class H5Reader(DataReader):
             raise IOError(f"无法读取H5文件: {file_path}") from e
 
 
+class SEGYReader(DataReader):
+    """SEGY格式数据读取器"""
+
+    def ReadRawData(
+        self, file_path: Path, target_col: Optional[list] = None
+    ) -> np.ndarray:
+        """读取SEGY格式的原始数据
+
+        Args:
+            file_path: 数据文件路径
+            target_col: 目标列索引列表
+
+        Returns:
+            np.ndarray: 读取的原始数据 (n_samples, n_channels)
+        """
+        self.ValidateFile(file_path)
+
+        try:
+            # 读取SEGY文件
+            # unpack_trace_headers=True 可以读取头部信息，但会增加内存消耗
+            # headonly=True 只读取头部用于校验，这里我们需要数据
+            st = obspy.read(str(file_path), format="SEGY")
+            
+            # 将Stream转换为numpy数组
+            # ObsPy的习惯是 (n_traces, n_samples)，我们需要转置为 (n_samples, n_channels)
+            # stack=True 确保所有trace长度一致并堆叠成二维数组
+            data = np.stack([tr.data for tr in st], axis=1)
+
+            # 如果提供了target_col，只选择指定列
+            if target_col is not None:
+                data = data[:, target_col]
+
+            return data
+        except Exception as e:
+            self.logger.error(f"读取SEGY文件时发生错误: {e}")
+            raise IOError(f"无法读取SEGY文件: {file_path}") from e
+
+
+class MiniSEEDReader(DataReader):
+    """MiniSEED格式数据读取器"""
+
+    def ReadRawData(
+        self, file_path: Path, target_col: Optional[list] = None
+    ) -> np.ndarray:
+        """读取MiniSEED格式的原始数据
+
+        Args:
+            file_path: 数据文件路径
+            target_col: 目标列索引列表
+
+        Returns:
+            np.ndarray: 读取的原始数据 (n_samples, n_channels)
+        """
+        self.ValidateFile(file_path)
+
+        try:
+            st = obspy.read(str(file_path), format="MSEED")
+            
+            # 确保所有trace对齐（MiniSEED可能有间隙）
+            st.merge(method=1, fill_value='interpolate')
+            
+            # 转换为numpy数组 (n_channels, n_samples) -> (n_samples, n_channels)
+            #由于MiniSEED不保证所有trace长度绝对一致（除非merge后trim），这里做个安全检查
+            lens = [len(tr) for tr in st]
+            if len(set(lens)) > 1:
+                # 裁剪到最小长度
+                min_len = min(lens)
+                self.logger.warning(f"Trace lengths inconsistent, trimming to {min_len}")
+                data = np.stack([tr.data[:min_len] for tr in st], axis=1)
+            else:
+                data = np.stack([tr.data for tr in st], axis=1)
+
+            # 如果提供了target_col，只选择指定列
+            if target_col is not None:
+                data = data[:, target_col]
+
+            return data
+        except Exception as e:
+            self.logger.error(f"读取MiniSEED文件时发生错误: {e}")
+            raise IOError(f"无法读取MiniSEED文件: {file_path}") from e
+
+
 class DASReader:
     """数据读取器类, 用于读取不同格式的数据文件"""
 
@@ -177,6 +262,10 @@ class DASReader:
             self.reader = DATReader(sampling_config)
         elif data_type == DataType.H5:
             self.reader = H5Reader(sampling_config)
+        elif data_type == DataType.SEGY:
+            self.reader = SEGYReader(sampling_config)
+        elif data_type == DataType.MINISEED:
+            self.reader = MiniSEEDReader(sampling_config)
         else:
             raise ValueError(f"不支持的数据类型: {data_type}")
 

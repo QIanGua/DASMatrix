@@ -45,6 +45,10 @@ config = SamplingConfig(
 # 创建读取器并读取数据
 reader = DASReader(config, data_type=DataType.DAT)
 data = reader.ReadRawData("path/to/data.dat")
+
+# 读取 SEGY 文件
+segy_reader = DASReader(config, data_type=DataType.SEGY)
+segy_data = segy_reader.ReadRawData("path/to/data.sgy")
 ```
 
 ### 2. 使用 DASFrame 进行链式处理
@@ -61,6 +65,7 @@ processed = (
     .detrend()              # 去趋势
     .demean()               # 去均值
     .bandpass(1, 500)       # 1-500Hz 带通滤波
+    .fk_filter(v_min=1500)  # FK 速度滤波 (>1500m/s)
     .normalize()            # 归一化
 )
 
@@ -79,6 +84,9 @@ processed.plot_heatmap(title="DAS Waterfall")
 
 # 频谱图
 processed.plot_spec(ch=0, title="Spectrogram")
+
+# FK 谱图
+processed.plot_fk(dx=1.0, v_lines=[1500, 3000], title="FK Spectrum")
 ```
 
 ---

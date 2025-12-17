@@ -45,3 +45,7 @@ viz.WaterfallPlot(data, title="Waterfall")
 ### WaterfallPlot
 
 ::: DASMatrix.visualization.das_visualizer.WaterfallPlot
+
+### FKPlot
+
+::: DASMatrix.visualization.das_visualizer.FKPlot

@@ -1102,6 +1102,10 @@
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># 创建读取器并读取数据</span>
 <a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">reader</span> <span class="o">=</span> <span class="n">DASReader</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">data_type</span><span class="o">=</span><span class="n">DataType</span><span class="o">.</span><span class="n">DAT</span><span class="p">)</span>
 <a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">data</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">ReadRawData</span><span class="p">(</span><span class="s2">&quot;path/to/data.dat&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># 读取 SEGY 文件</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="n">segy_reader</span> <span class="o">=</span> <span class="n">DASReader</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">data_type</span><span class="o">=</span><span class="n">DataType</span><span class="o">.</span><span class="n">SEGY</span><span class="p">)</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">segy_data</span> <span class="o">=</span> <span class="n">segy_reader</span><span class="o">.</span><span class="n">ReadRawData</span><span class="p">(</span><span class="s2">&quot;path/to/data.sgy&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="2-dasframe">2. 使用 DASFrame 进行链式处理<a class="headerlink" href="#2-dasframe" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">DASMatrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">df</span>
@@ -1115,11 +1119,12 @@
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="o">.</span><span class="n">detrend</span><span class="p">()</span>              <span class="c1"># 去趋势</span>
 <a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="o">.</span><span class="n">demean</span><span class="p">()</span>               <span class="c1"># 去均值</span>
 <a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="o">.</span><span class="n">bandpass</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">500</span><span class="p">)</span>       <span class="c1"># 1-500Hz 带通滤波</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="o">.</span><span class="n">normalize</span><span class="p">()</span>            <span class="c1"># 归一化</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="p">)</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1"># 获取处理结果</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">result</span> <span class="o">=</span> <span class="n">processed</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="o">.</span><span class="n">fk_filter</span><span class="p">(</span><span class="n">v_min</span><span class="o">=</span><span class="mi">1500</span><span class="p">)</span>  <span class="c1"># FK 速度滤波 (&gt;1500m/s)</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="o">.</span><span class="n">normalize</span><span class="p">()</span>            <span class="c1"># 归一化</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="p">)</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># 获取处理结果</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="n">result</span> <span class="o">=</span> <span class="n">processed</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
 </code></pre></div>
 <h3 id="3">3. 可视化<a class="headerlink" href="#3" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># 时间序列图</span>
@@ -1130,6 +1135,9 @@
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># 频谱图</span>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">processed</span><span class="o">.</span><span class="n">plot_spec</span><span class="p">(</span><span class="n">ch</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Spectrogram&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># FK 谱图</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">processed</span><span class="o">.</span><span class="n">plot_fk</span><span class="p">(</span><span class="n">dx</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">v_lines</span><span class="o">=</span><span class="p">[</span><span class="mi">1500</span><span class="p">,</span> <span class="mi">3000</span><span class="p">],</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;FK Spectrum&quot;</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="_5">常用操作<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h2>

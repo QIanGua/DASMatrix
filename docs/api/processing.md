@@ -17,3 +17,7 @@ DASMatrix 使用混合执行引擎（HybridEngine），支持：
 ### HybridEngine
 
 ::: DASMatrix.processing.engine.HybridEngine
+
+### DASProcessor
+
+::: DASMatrix.processing.das_processor.DASProcessor

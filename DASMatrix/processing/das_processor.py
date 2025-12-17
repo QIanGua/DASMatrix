@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from scipy import signal
@@ -296,4 +296,93 @@ class DASProcessor:
                 }
             )
 
-        return analysis_results
+    def f_k_transform(self, data: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """执行二维傅里叶变换 (F-K 变换)
+
+        Args:
+            data: 输入时空数据 (n_time, n_channels)
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: (spectrum, freqs, wavenumbers)
+                - spectrum: FK 谱 (complex)
+                - freqs: 频率轴 (Hz)
+                - wavenumbers: 波数轴 (1/m) 注意：需要知道空间采样率，此处暂假设 dx=1
+        """
+        nt, nx = data.shape
+        
+        # 对时间和空间维度进行 FFT
+        # 移位将零频移到中心
+        fk = np.fft.fftshift(np.fft.fft2(data))
+        
+        # 计算坐标轴
+        freqs = np.fft.fftshift(np.fft.fftfreq(nt, 1.0 / self.fs))
+        wavenumbers = np.fft.fftshift(np.fft.fftfreq(nx))  # 标准化波数，实际波数需除以 d_x
+        
+        return fk, freqs, wavenumbers
+
+    def iwf_k_transform(self, fk_spectrum: np.ndarray) -> np.ndarray:
+        """执行逆二维傅里叶变换 (Inverse F-K 变换)
+
+        Args:
+            fk_spectrum: FK 谱 (complex)
+
+        Returns:
+            np.ndarray: 恢复的时域数据 (real)
+        """
+        # 逆移位后逆变换
+        # 使用 ifft2 恢复，并只取实部（假设输入数据为实数）
+        data = np.fft.ifft2(np.fft.ifftshift(fk_spectrum)).real
+        return data
+
+    def FKFilter(
+        self, 
+        data: np.ndarray, 
+        v_min: Optional[float] = None, 
+        v_max: Optional[float] = None,
+        dx: float = 1.0
+    ) -> np.ndarray:
+        """应用 F-K 滤波器（速度滤波）
+
+        通过在 F-K 域中定义扇形区域来保留或切除特定视速度的波场。
+
+        Args:
+            data: 输入数据 (n_time, n_channels)
+            v_min: 最小保留视速度 (m/s)
+            v_max: 最大保留视速度 (m/s)
+            dx: 通道间距 (m)
+
+        Returns:
+            np.ndarray: 滤波后的数据
+        """
+        nt, nx = data.shape
+        fk, freqs, k = self.f_k_transform(data)
+        
+        # 调整波数轴为物理单位 (1/m)
+        k = k / dx
+        
+        # 创建网格
+        K, F = np.meshgrid(k, freqs)
+        
+        # 计算视速度 V = f / k
+        # 注意处理 k=0 的情况
+        with np.errstate(divide='ignore', invalid='ignore'):
+            V = F / K
+            
+        # 创建掩码
+        mask = np.ones_like(fk, dtype=bool)
+        
+        if v_min is not None:
+            # 仅保留速度大于 v_min 的波 (或小于 -v_min，对称)
+            # 实际上 FK 滤波通常定义为一个扇区
+            # 这里简单实现：保留 abs(V) >= v_min
+            mask &= (np.abs(V) >= abs(v_min)) | np.isnan(V)
+            
+        if v_max is not None:
+             # 保留 abs(V) <= v_max
+            mask &= (np.abs(V) <= abs(v_max)) | np.isnan(V)
+            
+        # 应用掩码
+        fk_filtered = fk * mask
+        
+        # 逆变换
+        return self.iwf_k_transform(fk_filtered)
