@@ -11,11 +11,12 @@ DASMatrix 是一个专为分布式声学传感（DAS）数据处理和分析设�
 
 ### 核心特性
 
-- **高效数据读取**：支持 DAT、HDF5 等多种数据格式
+- **高效数据读取**：支持 DAT、HDF5 等多种数据格式，支持 **Lazy Loading**
+- **分布式计算核心**：基于 **Xarray** 和 **Dask** 构建，支持外存处理（Out-of-Core）
+- **流畅的链式 API**：通过 `DASFrame` 提供直观的信号处理工作流
 - **专业信号处理**：提供频谱分析、滤波、积分等多种信号处理功能
 - **科学级可视化**：包含时域波形图、频谱图、时频图、瀑布图等多种可视化方式
 - **高性能设计**：关键算法采用向量化和并行计算优化
-- **易用的接口**：提供直观的 API，便于快速上手和集成
 
 ## 安装指南
 
@@ -64,7 +65,32 @@ reader = DASReader(sampling_config, data_type=DataType.DAT)
 raw_data = reader.ReadRawData("path/to/data.dat")
 ```
 
-### 数据处理示例
+### 2. 使用 DASFrame 进行链式处理 (推荐)
+
+DASMatrix 推荐使用 `DASFrame` 进行流式信号处理。它基于 Dask 构建计算图，直到调用 `.collect()` 时才真正加载和计算数据。
+
+```python
+from DASMatrix import df
+
+# 1. 创建 DASFrame (延迟加载)
+frame = df(raw_data, fs=10000)
+
+# 2. 构建处理流程
+processed = (
+    frame
+    .detrend(axis="time")   # 去趋势
+    .bandpass(1, 500)       # 带通滤波
+    .normalize()            # 归一化
+)
+
+# 3. 触发计算
+result = processed.collect()
+
+# 4. 快速可视化
+processed.plot_heatmap(title="Processed Waterfall")
+```
+
+### 3. 使用底层 Processor (高级/Legacy)
 
 ```python
 from DASMatrix.processing import DASProcessor
@@ -72,7 +98,7 @@ from DASMatrix.processing import DASProcessor
 # 创建处理器
 processor = DASProcessor(sampling_config)
 
-# 处理数据
+# 处理数据 (立即执行)
 diff_data = processor.ProcessDifferential(raw_data)        # 差分数据处理
 int_data = processor.IntegrateData(raw_data)               # 积分数据处理
 spectrum = processor.ComputeSpectrum(diff_data, channel_index=100)  # 计算频谱
@@ -131,10 +157,12 @@ plt.show()  # 显示图形(如果在脚本中运行)
 
 ## 项目结构
 
-```
+```text
 DASMatrix/
 ├── acquisition/           # 数据获取模块
 │   ├── das_reader.py      # DAS数据读取类
+├── api/                   # 核心 API
+│   ├── dasframe.py        # DASFrame (Xarray/Dask Backend)
 ├── config/                # 配置模块
 │   ├── sampling_config.py # 采样配置
 │   ├── visualization_config.py  # 可视化配置
@@ -151,24 +179,28 @@ DASMatrix/
 ### 数据获取模块 `DASMatrix.acquisition`
 
 该模块负责从不同数据源和格式读取 DAS 原始数据：
+
 - `DASReader`：主要读取器类，支持多种数据格式
 - `DataType`：数据类型枚举（DAT、HDF5 等）
 
 ### 数据处理模块 `DASMatrix.processing`
 
 该模块提供各种 DAS 数据处理和分析功能：
+
 - `DASProcessor`：主要处理器类，实现各种信号处理算法
 - 支持滤波、积分、频谱分析、峰值检测等功能
 
 ### 可视化模块 `DASMatrix.visualization`
 
 该模块提供科学级的数据可视化能力：
+
 - `DASVisualizer`：主要可视化器类，封装各种绘图功能
 - 支持时域波形图、频谱图、时频图、瀑布图等多种可视化
 
 ### 配置模块 `DASMatrix.config`
 
 该模块提供配置类和参数设置：
+
 - `SamplingConfig`：采样和数据格式相关配置
 - `VisualizationConfig`：可视化样式和参数配置
 

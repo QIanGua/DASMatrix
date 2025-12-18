@@ -42,7 +42,8 @@ config = SamplingConfig(
     byte_order="big"
 )
 
-# 创建读取器并读取数据
+# 创建读取器并读取数据 (支持延迟加载)
+# 返回 dask.array (lazy) 或 numpy.ndarray
 reader = DASReader(config, data_type=DataType.DAT)
 data = reader.ReadRawData("path/to/data.dat")
 

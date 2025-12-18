@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import xarray as xr
 
 from DASMatrix.api import df
 from DASMatrix.api.dasframe import DASFrame
@@ -33,6 +34,18 @@ class TestDASFrameCreation:
 
         assert frame._data.shape == (1000, 1)
 
+    def test_xarray_initialization(self):
+        """测试 xarray DataArray 初始化和分块"""
+        data = np.random.randn(1000, 10)
+        frame = DASFrame(data, fs=1000, dx=1.0)
+
+        # 验证底层数据是 xarray DataArray
+        assert isinstance(frame.data, xr.DataArray)
+        assert frame.data.shape == data.shape
+        assert frame.data.dims == ("time", "distance")
+        # 验证数据已分块
+        assert frame.data.chunks is not None
+
 
 class TestDASFrameBasicOperations:
     """测试 DASFrame 基本操作"""
@@ -63,8 +76,17 @@ class TestDASFrameBasicOperations:
         """测试归一化"""
         result = sample_frame.normalize(method="zscore").collect()
 
-        # Z-score 归一化后均值应接近 0
+        # Z-score 归一化后均值应接近 0，标准差应接近 1
         assert np.abs(result.mean()) < 1e-10
+        assert np.allclose(result.std(axis=0), 1, atol=1e-5)
+
+    def test_normalize_minmax(self, sample_frame):
+        """测试 MinMax 归一化"""
+        result = sample_frame.normalize(method="minmax").collect()
+
+        # MinMax 归一化后范围应为 [-1, 1]
+        assert np.allclose(result.min(axis=0), -1, atol=1e-5)
+        assert np.allclose(result.max(axis=0), 1, atol=1e-5)
 
     def test_demean(self, sample_frame):
         """测试去均值"""
@@ -133,6 +155,32 @@ class TestDASFrameTransforms:
 
         # FFT 结果应该是复数或能量谱（取决于实现）
         assert result is not None
+
+    def test_fft_frequency_peak(self):
+        """测试 FFT 频率峰值位置"""
+        # 创建纯 10Hz 信号
+        nt = 1000
+        t = np.linspace(0, 1, nt)
+        data = np.sin(2 * np.pi * 10 * t)[:, None] * np.ones((1, 5))
+        fs = 1000.0
+
+        frame = DASFrame(data, fs=fs)
+        spectrum = frame.fft()
+
+        # 验证返回类型
+        assert isinstance(spectrum, DASFrame)
+        # 验证维度变化：time -> frequency
+        assert "frequency" in spectrum.data.dims
+        assert "time" not in spectrum.data.dims
+
+        # 计算并验证峰值在 10Hz
+        spec_val = spectrum.data.compute()
+        freqs = spec_val.frequency.values
+        peak_idx = spec_val.argmax(dim="frequency")
+        peak_freqs = freqs[peak_idx]
+
+        # 验证峰值在 10Hz 附近
+        assert np.allclose(np.abs(peak_freqs), 10.0, atol=1.0)
 
     def test_stft(self, sample_frame):
         """测试 STFT"""

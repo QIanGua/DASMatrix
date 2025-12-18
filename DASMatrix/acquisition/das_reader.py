@@ -3,11 +3,13 @@ import os
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union, List
 
+import dask.array as da
 import h5py
 import numpy as np
 import obspy
+from ..config.sampling_config import SamplingConfig
 
 # 从DASMatrix.config导入配置类
 from ..config.sampling_config import SamplingConfig
@@ -45,7 +47,7 @@ class DataReader(ABC):
             target_col: 目标列索引列表，如 [21,22,249,251]，指定要处理的非连续列
 
         Returns:
-            np.ndarray: 读取的原始数据
+            Union[np.ndarray, da.Array]: 读取的原始数据
         """
         pass
 
@@ -101,21 +103,58 @@ class DATReader(DataReader):
         # 根据byte_order指定字节序
         dtype = ">i2" if self.sampling_config.byte_order == "big" else "<i2"
 
-        # 直接读取并重塑数据
+        # 如果是 lazy 模式 (chunks 不是 None)
+        chunks = getattr(self.sampling_config, "chunks", None) # 假设 config 有 chunks
+        # 或者增加参数 lazy=False
+        
+        # 统一策略：默认 lazy 如果文件很大？或者总是 lazy，用户可以 compute()
+        # 为了兼容性，我们可以让 ReadRawData 返回 da.Array，它是 np.ndarray 的鸭子类型
+        # 但是旧代码可能期待 pure numpy
+        
+        # 这里我们修改为：使用 memmap + dask
         try:
-            with open(file_path, "rb") as file:
-                raw_data = np.fromfile(
-                    file, dtype=dtype, count=row_count * self.sampling_config.channels
-                ).reshape((row_count, self.sampling_config.channels))
-
-            # 转换为物理量
-            raw_data = (raw_data * np.pi) / 2**13  # type: ignore
-
-            # 如果提供了target_col，只选择指定列
+            # Memory map the file
+            mmap_mode = "r"
+            raw_data_mmap = np.memmap(
+                file_path,
+                dtype=dtype,
+                mode=mmap_mode,
+                shape=(row_count, self.sampling_config.channels)
+            )
+            
+            # Wrap with dask array
+            # Chunking strategy: 
+            # If chunks not specified, default to auto or specific size
+            # Typically DAS data is time-heavy. 
+            # Let's chunk by time (e.g. 10000 samples) and full channels?
+            # Or use 'auto'
+            chunks = "auto"
+            
+            dask_data = da.from_array(raw_data_mmap, chunks=chunks)
+            
+            # Convert to physical units dealing with dask graph
+            # This is lazy
+            data = (dask_data * np.pi) / 2**13
+            
+            # Slicing columns (channels) is also lazy and efficient in dask
             if target_col is not None:
-                raw_data = raw_data[:, target_col]  # type: ignore
+                data = data[:, target_col]
+                
+            # For backward compatibility, if caller expects numpy, they might be surprised.
+            # But the task is "Refactor DASReader to support lazy loading".
+            # We should probably return dask array. 
+            # However, existing tests expect numpy shape immediately. Dask array has shape.
+            # Operations will be lazy.
+            
+            # Wait, if we return dask array, existing code doing things like `data[0]` works.
+            # But `type(data)` is `dask.array.core.Array`.
+            # Let's return dask array.
+            
+            return data
 
-            return raw_data
+        except Exception as e:
+            self.logger.error(f"读取DAT文件时发生错误: {e}")
+            raise IOError(f"无法读取DAT文件: {file_path}") from e
         except Exception as e:
             self.logger.error(f"读取DAT文件时发生错误: {e}")
             raise IOError(f"无法读取DAT文件: {file_path}") from e
@@ -139,16 +178,37 @@ class H5Reader(DataReader):
         self.ValidateFile(file_path)
 
         try:
-            with h5py.File(file_path, "r") as f:
-                if "Acquisition/Raw[0]" not in f:
-                    raise KeyError("HDF5文件中未找到 'Acquisition/Raw[0]' 数据集")
+            # Open file in read mode. Note: We cannot use 'with' block here if we want to return lazy array
+            # because closing file invalidates the h5 dataset.
+            # Dask handles this if we don't close immediately? 
+            # Actually standard practice for lazy h5 in typical scripts is tricky.
+            # But xarray/dask usually keeps file open or reopens.
+            # For dask.from_array(dataset), the file must remain open.
+            
+            # Compromise: We behave like xarray.open_dataset.
+            # We attach the file object to the array or reader? 
+            # Or we simply don't support context manager closing in strict sense inside this method.
+            # Let's assume user manages lifecycle or we leave it to GC (h5py does this reasonably).
+            
+            f = h5py.File(file_path, "r")
+            if "Acquisition/Raw[0]" not in f:
+                f.close()
+                raise KeyError("HDF5文件中未找到 'Acquisition/Raw[0]' 数据集")
 
-                raw_data = f["Acquisition/Raw[0]"][:] / 4
+            dataset = f["Acquisition/Raw[0]"]
+            
+            # Wrap with dask
+            # chunks=None means use h5 chunking if available, else auto?
+            # Safe to specify chunks="auto"
+            dask_data = da.from_array(dataset, chunks="auto") 
+            
+            # Divide by 4 (lazy)
+            raw_data = dask_data / 4
 
-            # 转换为物理量
-            raw_data = (raw_data * np.pi) / 2**13  # type: ignore
+            # 转换为物理量 (lazy)
+            raw_data = (raw_data * np.pi) / 2**13
 
-            # 如果提供了target_col，只选择指定列
+            # 如果提供了target_col，只选择指定列 (lazy)
             if target_col is not None:
                 raw_data = raw_data[:, target_col]
 

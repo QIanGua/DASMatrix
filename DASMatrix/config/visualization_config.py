@@ -90,6 +90,8 @@ class Typography:
     # 字体族
     family: str = "Arial"  # Nature/Science 推荐
     math_family: str = "stix"  # 数学字体
+    # 中文字体（macOS: STHeiti, Windows: Microsoft YaHei, Linux: Noto Serif SC）
+    cjk_family: str = "STHeiti"
 
     # 字号设置（单位：pt）
     title: int = 10  # 标题
@@ -244,9 +246,18 @@ class VisualizationConfig:
             "ytick.right": True,
             "xtick.minor.visible": self.show_minor_ticks,
             "ytick.minor.visible": self.show_minor_ticks,
-            # 字体
+            # 字体 - 中文字体优先，确保中文正确显示
             "font.family": "sans-serif",
-            "font.sans-serif": [self.typography.family, "Helvetica", "DejaVu Sans"],
+            "font.sans-serif": [
+                self.typography.cjk_family,  # 中文字体优先（默认 STHeiti）
+                "Songti SC",  # macOS 宋体
+                "Heiti TC",  # macOS 黑体繁体
+                "Noto Serif SC",  # Linux 中文字体
+                "Microsoft YaHei",  # Windows 中文字体
+                self.typography.family,
+                "Helvetica",
+                "DejaVu Sans",
+            ],
             "font.size": self.typography.label,
             "axes.labelsize": self.typography.label,
             "axes.titlesize": self.typography.title,

@@ -1,355 +1,229 @@
-from typing import Any, Optional, Union, List, cast
-import matplotlib.pyplot as plt
+"""DASFrame based on Xarray and Dask."""
+from typing import Any, Optional, Union, List, Tuple, cast
+
+import dask.array as da
 import numpy as np
+import xarray as xr
 from scipy import signal
-
-from ..core.computation_graph import (
-    ComputationGraph,
-    Node,
-    NodeDomain,
-    OperationNode,
-)
-from ..processing.engine import HybridEngine
-
+import matplotlib.pyplot as plt
 
 class DASFrame:
-    """DAS 数据处理核心类，提供流畅的链式 API。
+    """DAS 数据处理核心类 (Xarray/Dask Backend)。
 
-    DASFrame 采用延迟计算（Lazy Evaluation）模式，所有信号处理操作不会立即执行，
-    而是构建计算图，直到调用 `collect()` 或可视化方法时才真正计算。这种设计允许
-    引擎进行算子融合等优化，提高计算效率。
-
-    内部使用混合执行引擎（HybridEngine），协调 NumPy/SciPy 后端和 Numba JIT 后端。
-
-    Attributes:
-        _fs: 采样频率 (Hz)
-        _metadata: 用户自定义的元数据字典
-        _source_data: 原始数据引用
-        _graph: 计算图实例
-        _node: 当前指向的计算图节点
-        _engine: 混合执行引擎实例
-
-    Example:
-        >>> import numpy as np
-        >>> from DASMatrix import df
-        >>> data = np.random.randn(1000, 10)  # 1000 样本, 10 通道
-        >>> result = (
-        ...     df(data, fs=1000)
-        ...     .detrend()
-        ...     .bandpass(1, 100)
-        ...     .normalize()
-        ...     .collect()
-        ... )
+    所有信号处理操作基于 xarray 和 dask 进行延迟计算。
     """
 
     def __init__(
         self,
-        data: Any,
+        data: Union[xr.DataArray, np.ndarray, da.Array, "DASFrame"],
         fs: float,
-        graph: Optional[ComputationGraph] = None,
-        node: Optional[Node] = None,
+        dx: float = 1.0,
         **metadata: Any,
     ) -> None:
-        """初始化 DASFrame 实例。
+        """Initialize DASFrame.
 
         Args:
-            data: 输入数据，通常为形状 (n_samples, n_channels) 的 NumPy 数组
-            fs: 采样频率 (Hz)
-            graph: 计算图实例，用于链式操作传递（内部使用）
-            node: 当前指向的计算图节点（内部使用）
-            **metadata: 用户自定义的元数据，如 channel_names、units 等
+            data: Input data.
+            fs: Sampling frequency (Hz).
+            dx: Channel spacing (m).
+            **metadata: Additional metadata.
         """
+        if isinstance(data, DASFrame):
+             # Copy constructor roughly
+             self._data = data._data
+             self._fs = data.fs
+             self._dx = getattr(data, "_dx", dx)
+             self._metadata = {**data._metadata, **metadata}
+             return
+
         self._fs = fs
+        self._dx = dx
         self._metadata = metadata
-        self._source_data = data
 
-        self._engine = HybridEngine()
-
-        if graph is None:
-            self._graph = ComputationGraph.leaf(data)
-            self._node = self._graph.root
+        if isinstance(data, xr.DataArray):
+            # Ensure order is (time, distance)
+            if "time" in data.dims and data.dims[0] != "time":
+                data = data.transpose("time", ...)
+            self._data = data
         else:
-            self._graph = graph
-            self._node = node
+            # Wrap numpy/dask array into xarray
+            # Assume dims are (time, channel)
+            if not isinstance(data, (np.ndarray, da.Array)):
+                 data = np.asarray(data)
+
+            # Create coordinates
+            nt, nx = data.shape
+            coords = {
+                "time": np.arange(nt) / fs,
+                "distance": np.arange(nx) * dx,
+            }
+            
+            self._data = xr.DataArray(
+                data,
+                dims=("time", "distance"),
+                coords=coords,
+                name="das_strain",
+                attrs={
+                    "fs": fs,
+                    "dx": dx,
+                    **metadata
+                }
+            )
+            
+            # Ensure it is chunked (dask backed) if it isn't already
+            if not self._data.chunks:
+                self._data = self._data.chunk({"time": "auto", "distance": -1})
 
     @property
-    def _data(self) -> np.ndarray:
-        """获取原始数据（用于兼容性和测试）。"""
-        if self._source_data is not None:
-            return self._source_data
-        # 如果没有源数据，执行计算获取
-        return self.collect()
+    def data(self) -> xr.DataArray:
+        """Access underlying xarray DataArray."""
+        return self._data
+    
+    @property
+    def fs(self) -> float:
+        return self._fs
 
-    def _apply_signal_op(self, name: str, **kwargs) -> "DASFrame":
-        """应用信号域操作 (Signal Domain Op)。"""
-        if self._node is None:
-            raise ValueError("Current node is None")
-        new_node = OperationNode(
-            operation=name,
-            inputs=[self._node],
-            args=(),  # Assuming args should be an empty tuple by default
-            kwargs=kwargs,
-            domain=NodeDomain.SIGNAL,
-            name=name,
-        )
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        """Get shape of data."""
+        return self._data.shape
 
-        return DASFrame(
-            data=self._source_data,  # 保持源数据引用
-            fs=self._fs,
-            graph=self._graph,  # 共享图引用
-            node=new_node,  # 指向新头部
-            **self._metadata,
-        )
+    def collect(self) -> np.ndarray:
+        """Compute and return numpy array."""
+        return self._data.compute().values
 
     # --- 基础操作 ---
-    def collect(self) -> np.ndarray:
-        """触发延迟计算并返回结果数据。
-
-        这是延迟计算的终止方法。调用此方法时，计算图中的所有操作将被优化
-        并执行，返回最终的 NumPy 数组。
-
-        Returns:
-            np.ndarray: 计算后的数据数组，形状与输入相同或根据操作变化
-
-        Example:
-            >>> frame = df(data, fs=1000).bandpass(1, 100)
-            >>> result = frame.collect()  # 此时才真正执行滤波
-        """
-        exec_graph = ComputationGraph(self._node)
-        return self._engine.compute(exec_graph)
-
     def slice(self, t: slice = slice(None), x: slice = slice(None)) -> "DASFrame":
-        """对数据进行切片操作。
+        """Slice data."""
+        # xarray is slicing by index here (isel)
+        sliced = self._data.isel(time=t, distance=x)
+        return DASFrame(sliced, self._fs, self._dx, **self._metadata)
 
-        Args:
-            t: 时间维度的切片 (行)
-            x: 通道维度的切片 (列)
+    # --- Signal Operations ---
+    
+    def bandpass(self, low: float, high: float, order: int = 4) -> "DASFrame":
+        """Apply bandpass filter using dask map_overlap or map_blocks."""
+        
+        def _filter_func(block, fs, low, high, order):
+            nyq = 0.5 * fs
+            sos = signal.butter(order, [low / nyq, high / nyq], btype="band", output="sos")
+            # Apply along the last axis (core dimension moved to end by apply_ufunc)
+            return signal.sosfiltfilt(sos, block, axis=-1)
 
-        Returns:
-            DASFrame: 切片后的新 DASFrame
-        """
-        return self._apply_signal_op("slice", t=t, x=x)
-
-    # --- 时域 (Signal Domain) ---
-    def detrend(self, axis: str = "time") -> "DASFrame":
-        """去趋势，移除信号的线性趋势成分。
-
-        使用最小二乘法拟合并减去线性趋势，常用于预处理步骤。
-
-        Args:
-            axis: 去趋势的方向，'time' 表示沿时间轴（默认）
-
-        Returns:
-            DASFrame: 去趋势后的新 DASFrame 实例
-        """
-        return self._apply_signal_op("detrend", axis=axis)
-
-    def demean(self, axis: str = "time") -> "DASFrame":
-        """去均值，移除信号的直流分量。
-
-        沿指定轴计算均值并减去，使信号零均值化。
-
-        Args:
-            axis: 去均值的方向，'time' 表示沿时间轴（默认）
-
-        Returns:
-            DASFrame: 去均值后的新 DASFrame 实例
-        """
-        return self._apply_signal_op("demean", axis=axis)
-
-    def abs(self) -> "DASFrame":
-        """计算信号的绝对值。
-
-        对每个采样点取绝对值，常用于包络分析或能量计算。
-
-        Returns:
-            DASFrame: 绝对值后的新 DASFrame 实例
-        """
-        return self._apply_signal_op("abs")
-
-    def scale(self, factor: float = 1.0) -> "DASFrame":
-        """按指定因子缩放信号幅度。
-
-        将所有采样值乘以缩放因子。
-
-        Args:
-            factor: 缩放因子，默认为 1.0（不缩放）
-
-        Returns:
-            DASFrame: 缩放后的新 DASFrame 实例
-        """
-        return self._apply_signal_op("scale", factor=factor)
-
-    def normalize(self, method: str = "minmax") -> "DASFrame":
-        """归一化。
-
-        Args:
-            method: 归一化方法
-                - 'minmax': 归一化到 [-1, 1]
-                - 'zscore': Z-score 标准化 (mean=0, std=1)
-
-        Returns:
-            DASFrame: 归一化后的新 DASFrame
-        """
-        return self._apply_signal_op("normalize", method=method)
-
-    # --- 滤波器 ---
-    def bandpass(
-        self,
-        low: float,
-        high: float,
-        order: int = 4,
-        fs: Optional[float] = None,
-        design: str = "butter",
-    ) -> "DASFrame":
-        """带通滤波器，保留指定频率范围内的成分。
-
-        使用 Butterworth 滤波器设计，通过 SciPy 的零相位滤波（filtfilt）实现，
-        避免相位失真。
-
-        Args:
-            low: 低截止频率 (Hz)
-            high: 高截止频率 (Hz)
-            order: 滤波器阶数，默认为 4
-            fs: 采样频率 (Hz)，默认使用初始化时的采样频率
-            design: 滤波器设计类型，目前仅支持 'butter'
-
-        Returns:
-            DASFrame: 滤波后的新 DASFrame 实例
-
-        Raises:
-            ValueError: 当 low >= high 或频率超过奈奎斯特频率时
-
-        Example:
-            >>> filtered = df(data, fs=1000).bandpass(1, 100)
-        """
-        return self._apply_signal_op(
-            "bandpass", low=low, high=high, order=order, fs=fs or self._fs
+        data_contiguous_time = self._data.chunk({"time": -1})
+        
+        filtered = xr.apply_ufunc(
+            _filter_func,
+            data_contiguous_time,
+            kwargs={"fs": self._fs, "low": low, "high": high, "order": order},
+            input_core_dims=[["time"]],
+            output_core_dims=[["time"]],
+            dask="parallelized",
+            output_dtypes=[data_contiguous_time.dtype]
         )
+        
+        return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
     def lowpass(self, cutoff: float, order: int = 4) -> "DASFrame":
-        """低通滤波器，移除高于截止频率的成分。
+        """Apply lowpass filter."""
+        def _filter_func(block, fs, cutoff, order):
+            nyq = 0.5 * fs
+            sos = signal.butter(order, cutoff / nyq, btype="low", output="sos")
+            return signal.sosfiltfilt(sos, block, axis=-1)
 
-        使用 Butterworth 滤波器设计，通过零相位滤波实现。
-
-        Args:
-            cutoff: 截止频率 (Hz)
-            order: 滤波器阶数，默认为 4
-
-        Returns:
-            DASFrame: 滤波后的新 DASFrame 实例
-        """
-        return self._apply_signal_op("lowpass", cutoff=cutoff, order=order, fs=self._fs)
+        data_contiguous_time = self._data.chunk({"time": -1})
+        filtered = xr.apply_ufunc(
+            _filter_func,
+            data_contiguous_time,
+            kwargs={"fs": self._fs, "cutoff": cutoff, "order": order},
+            input_core_dims=[["time"]],
+            output_core_dims=[["time"]],
+            dask="parallelized",
+            output_dtypes=[data_contiguous_time.dtype]
+        )
+        return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
     def highpass(self, cutoff: float, order: int = 4) -> "DASFrame":
-        """高通滤波器，移除低于截止频率的成分。
+        """高通滤波器。"""
 
-        使用 Butterworth 滤波器设计，通过零相位滤波实现。
+        def _filter_func(block, fs, cutoff, order):
+            nyq = 0.5 * fs
+            sos = signal.butter(order, cutoff / nyq, btype="high", output="sos")
+            return signal.sosfiltfilt(sos, block, axis=-1)
 
-        Args:
-            cutoff: 截止频率 (Hz)
-            order: 滤波器阶数，默认为 4
-
-        Returns:
-            DASFrame: 滤波后的新 DASFrame 实例
-        """
-        return self._apply_signal_op(
-            "highpass", cutoff=cutoff, order=order, fs=self._fs
+        data_contiguous_time = self._data.chunk({"time": -1})
+        filtered = xr.apply_ufunc(
+            _filter_func,
+            data_contiguous_time,
+            kwargs={"fs": self._fs, "cutoff": cutoff, "order": order},
+            input_core_dims=[["time"]],
+            output_core_dims=[["time"]],
+            dask="parallelized",
+            output_dtypes=[data_contiguous_time.dtype],
         )
+        return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
     def notch(self, freq: float, Q: float = 30) -> "DASFrame":
-        """陷波滤波器，移除特定频率成分。
+        """陷波滤波器，移除特定频率成分。"""
 
-        Args:
-            freq: 需要移除的频率 (Hz)
-            Q: 品质因数，越大带宽越窄
+        def _filter_func(block, fs, freq, Q):
+            b, a = signal.iirnotch(freq, Q, fs)
+            return signal.filtfilt(b, a, block, axis=-1)
 
-        Returns:
-            DASFrame: 滤波后的新 DASFrame
-        """
-        return self._apply_signal_op("notch", freq=freq, Q=Q, fs=self._fs)
-
-    def median_filter(self, k: int = 5, axis: str = "time") -> "DASFrame":
-        """中值滤波。
-
-        Args:
-            k: 滤波窗口大小
-            axis: 滤波轴，'time' 或 'channel'
-
-        Returns:
-            DASFrame: 滤波后的新 DASFrame
-        """
-        return self._apply_signal_op("median_filter", k=k, axis=axis)
-
-    def fk_filter(
-        self,
-        v_min: Optional[float] = None,
-        v_max: Optional[float] = None,
-        dx: float = 1.0,
-    ) -> "DASFrame":
-        """F-K 滤波 (速度滤波)。
-
-        在频率-波数域中应用滤波，基于视速度分离波场。
-
-        Args:
-            v_min: 最小保留视速度 (m/s)
-            v_max: 最大保留视速度 (m/s)
-            dx: 通道间距 (m)，默认 1.0
-
-        Returns:
-            DASFrame: 滤波后的新 DASFrame
-        """
-        return self._apply_signal_op(
-            "fk_filter", v_min=v_min, v_max=v_max, dx=dx, fs=self._fs
+        data_contiguous_time = self._data.chunk({"time": -1})
+        filtered = xr.apply_ufunc(
+            _filter_func,
+            data_contiguous_time,
+            kwargs={"fs": self._fs, "freq": freq, "Q": Q},
+            input_core_dims=[["time"]],
+            output_core_dims=[["time"]],
+            dask="parallelized",
+            output_dtypes=[data_contiguous_time.dtype],
         )
+        return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
-    # --- 频域 (Frequency Domain) ---
-    def fft(self) -> "DASFrame":
-        """快速傅立叶变换，计算频谱幅度。
-
-        对每个通道沿时间轴进行 FFT，返回频谱幅度（绝对值）。
-
-        Returns:
-            DASFrame: 包含频谱幅度的新 DASFrame 实例
-        """
-        return self._apply_signal_op("fft")
-
-    def stft(self, nperseg: int = 256, noverlap: Optional[int] = None) -> "DASFrame":
-        """短时傅立叶变换，进行时频分析。
-
-        将信号分割成重叠的窗口并对每个窗口进行 FFT，获得时频谱表示。
-
-        Args:
-            nperseg: 每个窗口的采样点数，默认为 256
-            noverlap: 窗口重叠点数，默认为 nperseg // 2
-
-        Returns:
-            DASFrame: 包含时频谱的新 DASFrame 实例
-        """
-        if noverlap is None:
-            noverlap = nperseg // 2
-        return self._apply_signal_op(
-            "stft", nperseg=nperseg, noverlap=noverlap, fs=self._fs
+    def detrend(self, axis: str = "time") -> "DASFrame":
+        """Detrend data."""
+        def _detrend_func(data):
+            return signal.detrend(data, axis=-1)
+            
+        if axis == "time":
+             data = self._data.chunk({"time": -1})
+        else:
+             data = self._data.chunk({"distance": -1})
+             
+        detrended = xr.apply_ufunc(
+            _detrend_func,
+            data,
+            input_core_dims=[[axis]],
+            output_core_dims=[[axis]],
+            dask="parallelized",
+            output_dtypes=[data.dtype]
         )
+        
+        return DASFrame(detrended, self._fs, self._dx, **self._metadata)
 
-    def hilbert(self) -> "DASFrame":
-        """希尔伯特变换，返回解析信号。
+    def demean(self, axis: str = "time") -> "DASFrame":
+        """Remove mean value along specified axis."""
+        dim = "time" if axis == "time" else "distance"
+        demeaned = self._data - self._data.mean(dim=dim)
+        return DASFrame(demeaned, self._fs, self._dx, **self._metadata)
 
-        Returns:
-            DASFrame: 包含复数解析信号的新 DASFrame
-        """
-        return self._apply_signal_op("hilbert")
+    def normalize(self, method: str = "minmax") -> "DASFrame":
+        """归一化。"""
+        if method == "zscore":
+            mean = self._data.mean(dim="time")
+            std = self._data.std(dim="time")
+            std = xr.where(std == 0, 1.0, std)
+            normalized = (self._data - mean) / std
+        else:  # minmax
+            min_val = self._data.min(dim="time")
+            max_val = self._data.max(dim="time")
+            range_val = max_val - min_val
+            range_val = xr.where(range_val == 0, 1.0, range_val)
+            normalized = 2 * (self._data - min_val) / range_val - 1
 
-    def envelope(self) -> "DASFrame":
-        """提取信号包络。
-
-        通过希尔伯特变换计算解析信号，并取其绝对值作为包络。
-        包络表示信号的瞬时幅度变化。
-
-        Returns:
-            DASFrame: 包含包络的新 DASFrame 实例
-        """
-        return self._apply_signal_op("envelope")
+        return DASFrame(normalized, self._fs, self._dx, **self._metadata)
 
     # --- 统计 (Statistics) ---
     def mean(self, axis: Optional[int] = 0) -> np.ndarray:
@@ -357,87 +231,155 @@ class DASFrame:
 
         Args:
             axis: 计算轴，0 表示沿时间轴返回每通道的均值，None 返回全局标量
-
-        Returns:
-            np.ndarray: 均值结果
         """
-        data = self.collect()
-        return np.mean(data, axis=axis)
+        if axis is None:
+            return self._data.mean().compute().values
+        dim = "time" if axis == 0 else "distance"
+        return self._data.mean(dim=dim).compute().values
 
     def std(self, axis: Optional[int] = 0) -> np.ndarray:
-        """计算标准差。
-
-        Args:
-            axis: 计算轴，0 表示沿时间轴返回每通道的标准差，None 返回全局标量
-
-        Returns:
-            np.ndarray: 标准差结果
-        """
-        data = self.collect()
-        return np.std(data, axis=axis)
+        """计算标准差。"""
+        if axis is None:
+            return self._data.std().compute().values
+        dim = "time" if axis == 0 else "distance"
+        return self._data.std(dim=dim).compute().values
 
     def max(self, axis: Optional[int] = 0) -> np.ndarray:
-        """计算最大值。
-
-        Args:
-            axis: 计算轴，0 表示沿时间轴返回每通道的最大值，None 返回全局标量
-
-        Returns:
-            np.ndarray: 最大值结果
-        """
-        data = self.collect()
-        return np.max(data, axis=axis)
+        """计算最大值。"""
+        if axis is None:
+            return self._data.max().compute().values
+        dim = "time" if axis == 0 else "distance"
+        return self._data.max(dim=dim).compute().values
 
     def min(self, axis: Optional[int] = 0) -> np.ndarray:
-        """计算最小值。
-
-        Args:
-            axis: 计算轴，0 表示沿时间轴返回每通道的最小值，None 返回全局标量
-
-        Returns:
-            np.ndarray: 最小值结果
-        """
-        data = self.collect()
-        return np.min(data, axis=axis)
+        """计算最小值。"""
+        if axis is None:
+            return self._data.min().compute().values
+        dim = "time" if axis == 0 else "distance"
+        return self._data.min(dim=dim).compute().values
 
     def rms(self, window: Optional[int] = None) -> np.ndarray:
-        """计算 RMS（均方根）。
-
-        Args:
-            window: 滑动窗口大小，默认为 None 表示计算全局 RMS
-
-        Returns:
-            np.ndarray: RMS 结果，如指定 window 则返回滑动 RMS
-        """
-        data = self.collect()
+        """计算 RMS（均方根）。"""
+        data_sq = self._data**2
         if window is None:
-            return np.sqrt(np.mean(data**2, axis=0))
+            return np.sqrt(data_sq.mean(dim="time").compute().values)
         else:
-            from scipy.ndimage import uniform_filter1d
-            return np.sqrt(uniform_filter1d(data**2, size=window, axis=0))
+            # 滑动 RMS，使用 xarray 滚动窗口
+            rolling_mean = data_sq.rolling(time=window, center=True).mean()
+            return np.sqrt(rolling_mean.compute().values)
+
+    def fft(self) -> "DASFrame":
+        """快速傅立叶变换，计算频谱幅度。"""
+        def _fft_func(data):
+            return np.abs(np.fft.fft(data, axis=-1))
+
+        data = self._data.chunk({"time": -1})
+        n_samples = data.sizes["time"]
+        freqs = np.fft.fftfreq(n_samples, 1 / self._fs)
+
+        spectrum = xr.apply_ufunc(
+            _fft_func,
+            data,
+            input_core_dims=[["time"]],
+            output_core_dims=[["frequency"]],
+            dask="parallelized",
+            output_dtypes=[float],
+            dask_gufunc_kwargs={"output_sizes": {"frequency": n_samples}},
+        )
+
+        spectrum = spectrum.assign_coords(frequency=freqs)
+        # 注意：FFT 变换后，'time' 轴变成了 'frequency' 轴，fs 含义也变化了
+        # 这里为了链式调用返回 DASFrame，但其内部结构已经发生了变化（domain 位移）
+        return DASFrame(spectrum, self._fs, self._dx, **self._metadata)
+
+    def hilbert(self) -> "DASFrame":
+        """希尔伯特变换，返回解析信号。"""
+
+        def _hilbert_func(data):
+            return signal.hilbert(data, axis=-1)
+
+        data = self._data.chunk({"time": -1})
+        analytical = xr.apply_ufunc(
+            _hilbert_func,
+            data,
+            input_core_dims=[["time"]],
+            output_core_dims=[["time"]],
+            dask="parallelized",
+            output_dtypes=[complex],
+        )
+        return DASFrame(analytical, self._fs, self._dx, **self._metadata)
+
+    def envelope(self) -> "DASFrame":
+        """提取信号包络。"""
+        analytical = self.hilbert()
+        return analytical.abs()
+
+    def scale(self, factor: float = 1.0) -> "DASFrame":
+        """Scale amplitude."""
+        scaled = self._data * factor
+        return DASFrame(scaled, self._fs, self._dx, **self._metadata)
+
+    def abs(self) -> "DASFrame":
+        """Absolute value."""
+        return DASFrame(np.abs(self._data), self._fs, self._dx, **self._metadata)
+
+    def stft(self, nperseg: int = 256, noverlap: Optional[int] = None) -> "DASFrame":
+        """短时傅立叶变换，进行时频分析。"""
+        if noverlap is None:
+            noverlap = nperseg // 2
+
+        data = self.collect()
+        # signal.stft for 2D data with axis=0:
+        # returns f, t, Zxx where Zxx shape is (freq, distance, time)
+        f, t, Zxx = signal.stft(
+            data, fs=self._fs, nperseg=nperseg, noverlap=noverlap, axis=0
+        )
+        
+        # 将 Zxx 从 (freq, distance, time) 转换为 (freq, time, distance)
+        Zxx_abs = np.abs(Zxx).transpose(0, 2, 1)
+
+        # 将结果包装回 xr.DataArray
+        stft_data = xr.DataArray(
+            Zxx_abs,
+            dims=("frequency", "time", "distance"),
+            coords={
+                "frequency": f,
+                "time": t,
+                "distance": self._data.distance,
+            },
+            name="stft",
+            attrs=self._data.attrs,
+        )
+        return DASFrame(stft_data, self._fs, self._dx, **self._metadata)
+
+    def fk_filter(
+        self,
+        v_min: Optional[float] = None,
+        v_max: Optional[float] = None,
+        dx: float = 1.0,
+    ) -> "DASFrame":
+        """F-K 滤波 (速度滤波)。"""
+        data = self.collect()
+        from ..processing.das_processor import DASProcessor
+        from ..config.sampling_config import SamplingConfig
+
+        config = SamplingConfig(fs=self._fs, channels=data.shape[1])
+        processor = DASProcessor(config)
+        filtered = processor.FKFilter(data, v_min=v_min, v_max=v_max, dx=dx)
+        return DASFrame(filtered, self._fs, dx, **self._metadata)
 
     # --- 检测 (Detection) ---
     def threshold_detect(
         self, threshold: Optional[float] = None, sigma: float = 3.0
     ) -> np.ndarray:
-        """阈值检测，检测超过阈值的采样点。
-
-        Args:
-            threshold: 自定义阈值，默认为 None 表示使用 mean + sigma * std
-            sigma: 标准差倍数，用于自动计算阈值
-
-        Returns:
-            np.ndarray: 布尔矩阵，True 表示该点超过阈值
-
-        Example:
-            >>> detections = df(data, fs=1000).threshold_detect(sigma=3.0)
-        """
+        """阈值检测。"""
         data = self.collect()
         if threshold is None:
             threshold = np.mean(data) + sigma * np.std(data)
         return np.abs(data) > threshold
 
-    # --- 可视化 (Visualization) ---
+    # --- Visualization ---
+
     def plot_ts(
         self,
         ch: Optional[int] = None,
@@ -469,13 +411,41 @@ class DASFrame:
 
     def plot_heatmap(
         self,
+        channels: Optional[slice] = None,
+        t_range: Optional[slice] = None,
         title: str = "DAS Waterfall",
         cmap: str = "RdBu_r",
         ax: Optional[plt.Axes] = None,
         **kwargs,
     ) -> plt.Figure:
-        """绘制热图（瀑布图）。"""
+        """绘制热图（瀑布图）。
+
+        Args:
+            channels: 通道切片，例如 slice(10, 60, 5)。
+            t_range: 时间样本切片（以样本为单位），例如 slice(0, 1000)。
+            title: 图标题。
+            cmap: 颜色映射。
+            ax: 可选的 matplotlib Axes 对象。
+            **kwargs: 传递给 imshow 的额外参数。
+
+        Returns:
+            matplotlib Figure 对象。
+        """
         data = self.collect()
+
+        # 应用时间切片
+        if t_range is not None:
+            data = data[t_range, :]
+            t_start = (t_range.start or 0) / self._fs
+        else:
+            t_start = 0.0
+
+        # 应用通道切片
+        if channels is not None:
+            data = data[:, channels]
+            ch_start = channels.start or 0
+        else:
+            ch_start = 0
 
         if ax is None:
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -484,7 +454,12 @@ class DASFrame:
                 raise ValueError("Provided ax must belong to a figure")
             fig = cast(plt.Figure, ax.figure)
 
-        extent = (0, float(data.shape[1]), float(data.shape[0] / self._fs), 0)
+        extent = (
+            ch_start,
+            ch_start + float(data.shape[1]),
+            t_start + float(data.shape[0] / self._fs),
+            t_start,
+        )
         vmax = np.percentile(np.abs(data), 98)
         im = ax.imshow(
             data,
@@ -499,41 +474,8 @@ class DASFrame:
         ax.set_xlabel("Channel")
         ax.set_ylabel("Time (s)")
         ax.set_title(title)
-        # 仅当创建新 figure 时添加 colorbar，或者是显式要求
-        # 简单起见，这里总是尝试添加，但需要注意 layout
         if ax is not None:
             plt.colorbar(im, ax=ax, label="Amplitude")
-        else:
-            plt.colorbar(im, ax=ax, label="Amplitude")
-        return fig
-
-    def plot_spec(
-        self,
-        ch: int = 0,
-        nperseg: int = 256,
-        title: str = "Spectrogram",
-        ax: Optional[plt.Axes] = None,
-        **kwargs,
-    ) -> plt.Figure:
-        """绘制频谱图。"""
-        data = self.collect()
-
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(10, 4))
-        else:
-            if ax.figure is None:
-                raise ValueError("Provided ax must belong to a figure")
-            fig = cast(plt.Figure, ax.figure)
-
-        f, t, Sxx = signal.spectrogram(data[:, ch], fs=self._fs, nperseg=nperseg)
-
-        im = ax.pcolormesh(
-            t, f, 10 * np.log10(Sxx + 1e-10), shading="gouraud", cmap="viridis"
-        )
-        plt.colorbar(im, ax=ax, label="Power (dB)")
-        ax.set_ylabel("Frequency (Hz)")
-        ax.set_xlabel("Time (s)")
-        ax.set_title(title)
         return fig
 
     def plot_fk(
@@ -544,52 +486,20 @@ class DASFrame:
         ax: Optional[plt.Axes] = None,
         **kwargs: Any,
     ) -> plt.Figure:
-        """绘制 F-K 谱图 (Frequency-Wavenumber Spectrum)。
-
-        Args:
-            dx: 空间采样间隔 (m)
-            title: 图表标题
-            v_lines: 待标记的速度线列表 (m/s)，如 [1500, 3000]
-            ax: Matplotlib Axes 对象 (可选)
-            **kwargs: dict[str, Any] 传递给绘图函数的其他参数
-
-        Returns:
-            plt.Figure: Matplotlib 图形对象
-        """
-        # 为了绘图，我们需要先获取数据并计算 FK 变换
-        # 注意：这里我们立即执行计算，而不是作为计算图的一部分
-        # 因为可视化通常是终端操作
         data = self.collect()
-        
-        # 使用 Processor 计算 FK
-        # 临时创建一个 Processor 实例，或者逻辑可以复用
-        # 这里为了方便直接使用 scipy/numpy，或者复用 das_processor
-        # 鉴于 das_processor 逻辑较多，且我们在 frame 里没有 direct access to processor instance
-        # 但我们之前实现了 engine 的 logic。
-        # 这里我们在 collect() 后得到 numpy array，可以直接使用 das_processor
         
         from ..processing.das_processor import DASProcessor
         from ..config.sampling_config import SamplingConfig
         
-        # 临时配置
         config = SamplingConfig(fs=self._fs, channels=data.shape[1])
         processor = DASProcessor(config)
         
         fk, freqs, k = processor.f_k_transform(data)
-        
-        # 调整 k 轴
         k = k / dx
         
-        # 调用 Visualizer
-        # DASFrame 目前还没有 direct access to visualizer instance
-        # 我们按需实例化
         from ..visualization.das_visualizer import FKPlot
         
         plotter = FKPlot()
-        # 注意：plotter.plot 返回 figure。如果提供了 ax，我们需要适配
-        # 目前 FKPlot.plot 创建新 figure。我们需要修改它支持 ax，或者直接在这里处理
-        # 考虑到时间，我们使用 visualizer 默认行为
-        
         fig = plotter.plot(
             fk, 
             freqs, 
@@ -598,5 +508,4 @@ class DASFrame:
             v_lines=v_lines, 
             **kwargs
         )
-        
         return fig

@@ -20,6 +20,7 @@ config = SamplingConfig(fs=10000, channels=512)
 
 # DAT 文件读取
 reader = DASReader(config, data_type=DataType.DAT)
+# ReadRawData: 读取原始数据的方法，返回 `numpy.ndarray` 或 `dask.array.Array` (支持延迟加载)。
 data = reader.ReadRawData("path/to/file.dat")
 
 # HDF5 文件读取
