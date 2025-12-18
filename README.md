@@ -22,7 +22,7 @@ DASMatrix 是一个专为分布式声学传感（DAS）数据处理和分析设�
 
 ### 环境要求
 
-- Python 3.8+
+- Python 3.9+
 - NumPy 1.20+
 - SciPy 1.7+
 - Matplotlib 3.4+

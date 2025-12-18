@@ -308,7 +308,7 @@ def get_colors(n: int, palette: Optional[ColorPalette] = None) -> list:
         return palette.primary[:n]
     else:
         # 需要更多颜色，使用 colormap 插值
-        cmap = plt.cm.get_cmap("tab20")
+        cmap = plt.colormaps.get_cmap("tab20")
         return [cmap(i / n) for i in range(n)]
 
 
