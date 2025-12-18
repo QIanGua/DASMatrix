@@ -34,7 +34,7 @@ def benchmark():
     print("\n[Scenario A] Running Standard NumPy/SciPy Stack...")
     start_time = time.time()
 
-    # 1. Detrend (Time-consuming, allocates new array or modifies in place depending on impl)
+    # 1. Detrend (Time-consuming)
     # scipy.signal.detrend returns new array by default
     step1 = signal.detrend(data_numpy, axis=0)
 
@@ -66,7 +66,7 @@ def benchmark():
 
     # First Run (Cold Start - Includes JIT Compilation)
     start_time = time.time()
-    result_hybrid_cold = lazy_op.collect()
+    _ = lazy_op.collect()
     end_time = time.time()
     cold_duration = end_time - start_time
     print(f"⚠️  Cold Start (w/ JIT Compile): {cold_duration:.4f} s")

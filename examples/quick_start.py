@@ -70,7 +70,7 @@ def main():
 
     # 生成热图可视化
     print("生成热图...")
-    fig = processed.plot_heatmap()
+    processed.plot_heatmap()
     plt.savefig("das_heatmap.png")
 
     # 事件检测

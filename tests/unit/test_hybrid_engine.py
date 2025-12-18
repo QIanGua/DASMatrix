@@ -67,7 +67,7 @@ def test_chain_fusion_correctness(sample_data, df):
 
 
 def test_bandpass_placeholder(sample_data, df):
-    """Test bandpass (currently valid but maybe not numerically perfect filter imp yet)."""
+    """Test bandpass (placeholder test)."""
     # Just ensure it runs without error and returns correct shape
     result = df.bandpass(1, 10).collect()
     assert result.shape == sample_data.shape

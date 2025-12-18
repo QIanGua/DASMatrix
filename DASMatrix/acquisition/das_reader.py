@@ -3,16 +3,16 @@ import os
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, Union, List
+from typing import List, Optional, Union
 
 import dask.array as da
 import h5py
 import numpy as np
-import obspy
+import obspy  # type: ignore
+
 from ..config.sampling_config import SamplingConfig
 
 # 从DASMatrix.config导入配置类
-from ..config.sampling_config import SamplingConfig
 
 
 class DataType(Enum):
@@ -38,8 +38,8 @@ class DataReader(ABC):
 
     @abstractmethod
     def ReadRawData(
-        self, file_path: Path, target_col: Optional[list] = None
-    ) -> np.ndarray:
+        self, file_path: Path, target_col: Optional[List[int]] = None
+    ) -> Union[np.ndarray, "da.Array"]:
         """读取原始数据
 
         Args:
@@ -79,8 +79,8 @@ class DATReader(DataReader):
     """DAT格式数据读取器"""
 
     def ReadRawData(
-        self, file_path: Path, target_col: Optional[list] = None
-    ) -> np.ndarray:
+        self, file_path: Path, target_col: Optional[List[int]] = None
+    ) -> Union[np.ndarray, "da.Array"]:
         """读取DAT格式的原始数据
 
         Args:
@@ -104,52 +104,54 @@ class DATReader(DataReader):
         dtype = ">i2" if self.sampling_config.byte_order == "big" else "<i2"
 
         # 如果是 lazy 模式 (chunks 不是 None)
-        chunks = getattr(self.sampling_config, "chunks", None) # 假设 config 有 chunks
+        chunks = getattr(self.sampling_config, "chunks", None)  # 假设 config 有 chunks
         # 或者增加参数 lazy=False
-        
+
         # 统一策略：默认 lazy 如果文件很大？或者总是 lazy，用户可以 compute()
         # 为了兼容性，我们可以让 ReadRawData 返回 da.Array，它是 np.ndarray 的鸭子类型
         # 但是旧代码可能期待 pure numpy
-        
+
         # 这里我们修改为：使用 memmap + dask
         try:
             # Memory map the file
             mmap_mode = "r"
             raw_data_mmap = np.memmap(
-                file_path,
+                str(file_path),
                 dtype=dtype,
                 mode=mmap_mode,
-                shape=(row_count, self.sampling_config.channels)
-            )
-            
+                shape=(int(row_count), int(self.sampling_config.channels)),
+            )  # type: ignore
+
             # Wrap with dask array
-            # Chunking strategy: 
+            # Chunking strategy:
             # If chunks not specified, default to auto or specific size
-            # Typically DAS data is time-heavy. 
+            # Typically DAS data is time-heavy.
             # Let's chunk by time (e.g. 10000 samples) and full channels?
             # Or use 'auto'
             chunks = "auto"
-            
+
             dask_data = da.from_array(raw_data_mmap, chunks=chunks)
-            
+
             # Convert to physical units dealing with dask graph
             # This is lazy
             data = (dask_data * np.pi) / 2**13
-            
+
             # Slicing columns (channels) is also lazy and efficient in dask
             if target_col is not None:
                 data = data[:, target_col]
-                
-            # For backward compatibility, if caller expects numpy, they might be surprised.
-            # But the task is "Refactor DASReader to support lazy loading".
-            # We should probably return dask array. 
-            # However, existing tests expect numpy shape immediately. Dask array has shape.
-            # Operations will be lazy.
-            
-            # Wait, if we return dask array, existing code doing things like `data[0]` works.
+
+            # For backward compatibility, if caller expects numpy,
+            # they might be surprised. But the task is "Refactor
+            # DASReader to support lazy loading".
+            # We should probably return dask array.
+            # However, existing tests expect numpy shape immediately.
+            # Dask array has shape. Operations will be lazy.
+
+            # Wait, if we return dask array, existing code doing
+            # things like `data[0]` works.
             # But `type(data)` is `dask.array.core.Array`.
             # Let's return dask array.
-            
+
             return data
 
         except Exception as e:
@@ -164,8 +166,8 @@ class H5Reader(DataReader):
     """HDF5格式数据读取器"""
 
     def ReadRawData(
-        self, file_path: Path, target_col: Optional[list] = None
-    ) -> np.ndarray:
+        self, file_path: Path, target_col: Optional[List[int]] = None
+    ) -> Union[np.ndarray, "da.Array"]:
         """读取HDF5格式的原始数据
 
         Args:
@@ -178,30 +180,31 @@ class H5Reader(DataReader):
         self.ValidateFile(file_path)
 
         try:
-            # Open file in read mode. Note: We cannot use 'with' block here if we want to return lazy array
-            # because closing file invalidates the h5 dataset.
-            # Dask handles this if we don't close immediately? 
+            # Open file in read mode. Note: We cannot use 'with' block here if
+            # we want to return lazy array because closing file invalidates
+            # the h5 dataset. Dask handles this if we don't close immediately?
             # Actually standard practice for lazy h5 in typical scripts is tricky.
             # But xarray/dask usually keeps file open or reopens.
             # For dask.from_array(dataset), the file must remain open.
-            
+
             # Compromise: We behave like xarray.open_dataset.
-            # We attach the file object to the array or reader? 
-            # Or we simply don't support context manager closing in strict sense inside this method.
-            # Let's assume user manages lifecycle or we leave it to GC (h5py does this reasonably).
-            
+            # We attach the file object to the array or reader?
+            # Or we simply don't support context manager closing in strict
+            # sense inside this method. Let's assume user manages
+            # lifecycle or we leave it to GC (h5py does this reasonably).
+
             f = h5py.File(file_path, "r")
             if "Acquisition/Raw[0]" not in f:
                 f.close()
                 raise KeyError("HDF5文件中未找到 'Acquisition/Raw[0]' 数据集")
 
             dataset = f["Acquisition/Raw[0]"]
-            
+
             # Wrap with dask
             # chunks=None means use h5 chunking if available, else auto?
             # Safe to specify chunks="auto"
-            dask_data = da.from_array(dataset, chunks="auto") 
-            
+            dask_data = da.from_array(dataset, chunks="auto")
+
             # Divide by 4 (lazy)
             raw_data = dask_data / 4
 
@@ -222,8 +225,8 @@ class SEGYReader(DataReader):
     """SEGY格式数据读取器"""
 
     def ReadRawData(
-        self, file_path: Path, target_col: Optional[list] = None
-    ) -> np.ndarray:
+        self, file_path: Path, target_col: Optional[List[int]] = None
+    ) -> Union[np.ndarray, "da.Array"]:
         """读取SEGY格式的原始数据
 
         Args:
@@ -240,9 +243,10 @@ class SEGYReader(DataReader):
             # unpack_trace_headers=True 可以读取头部信息，但会增加内存消耗
             # headonly=True 只读取头部用于校验，这里我们需要数据
             st = obspy.read(str(file_path), format="SEGY")
-            
+
             # 将Stream转换为numpy数组
-            # ObsPy的习惯是 (n_traces, n_samples)，我们需要转置为 (n_samples, n_channels)
+            # ObsPy的习惯是 (n_traces, n_samples)
+            # 我们需要转置为 (n_samples, n_channels)
             # stack=True 确保所有trace长度一致并堆叠成二维数组
             data = np.stack([tr.data for tr in st], axis=1)
 
@@ -260,8 +264,8 @@ class MiniSEEDReader(DataReader):
     """MiniSEED格式数据读取器"""
 
     def ReadRawData(
-        self, file_path: Path, target_col: Optional[list] = None
-    ) -> np.ndarray:
+        self, file_path: Path, target_col: Optional[List[int]] = None
+    ) -> Union[np.ndarray, "da.Array"]:
         """读取MiniSEED格式的原始数据
 
         Args:
@@ -275,17 +279,19 @@ class MiniSEEDReader(DataReader):
 
         try:
             st = obspy.read(str(file_path), format="MSEED")
-            
+
             # 确保所有trace对齐（MiniSEED可能有间隙）
-            st.merge(method=1, fill_value='interpolate')
-            
+            st.merge(method=1, fill_value="interpolate")
+
             # 转换为numpy数组 (n_channels, n_samples) -> (n_samples, n_channels)
-            #由于MiniSEED不保证所有trace长度绝对一致（除非merge后trim），这里做个安全检查
+            # 由于MiniSEED不保证所有trace长度绝对一致（除非merge后trim）
             lens = [len(tr) for tr in st]
             if len(set(lens)) > 1:
                 # 裁剪到最小长度
                 min_len = min(lens)
-                self.logger.warning(f"Trace lengths inconsistent, trimming to {min_len}")
+                self.logger.warning(
+                    f"Trace lengths inconsistent, trimming to {min_len}"
+                )
                 data = np.stack([tr.data[:min_len] for tr in st], axis=1)
             else:
                 data = np.stack([tr.data for tr in st], axis=1)
@@ -330,8 +336,8 @@ class DASReader:
             raise ValueError(f"不支持的数据类型: {data_type}")
 
     def ReadRawData(
-        self, file_path: Path, target_col: Optional[list] = None
-    ) -> np.ndarray:
+        self, file_path: Path, target_col: Optional[List[int]] = None
+    ) -> Union[np.ndarray, "da.Array"]:
         """读取指定路径的数据文件
 
         Args:

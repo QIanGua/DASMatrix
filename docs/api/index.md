@@ -1,28 +1,22 @@
 # API 文档
 
-DASMatrix 的 API 按功能模块组织，主要包括以下部分：
+DASMatrix 的 API 按功能模块组织。
+本页面提供了自动生成的 API 参考文档，始终与代码保持同步。
 
-## 模块概览
+## 核心模块
 
-### 核心 API
+- **[DASFrame](../reference/DASMatrix/api/dasframe.md)** - 核心数据处理类，基于 Xarray/Dask
+- **[数据读取](../reference/DASMatrix/acquisition/index.md)** - 支持多种格式的数据读取
+- **[信号处理](../reference/DASMatrix/processing/index.md)** - 丰富的信号处理算法库
+- **[可视化](../reference/DASMatrix/visualization/index.md)** - 科学级数据可视化工具
 
-- **[DASFrame](dasframe.md)** - 核心数据处理类，提供链式 API 进行信号处理
+## 浏览完整 API
 
-### 数据获取
+您可以从左侧导航栏或以下链接浏览完整的模块参考：
 
-- **[数据读取](reader.md)** - 支持 DAT、HDF5 等格式的数据读取
-
-### 信号处理
-
-- **[信号处理](processing.md)** - 滤波、变换、统计等信号处理功能
-
-### 可视化
-
-- **[可视化](visualization.md)** - 科学级数据可视化（波形图、频谱图、瀑布图等）
-
-### 内部实现
-
-- **[计算图](computation_graph.md)** - 延迟计算图实现
+- [DASMatrix 核心](../reference/DASMatrix/index.md)
+- [API 接口](../reference/DASMatrix/api/index.md)
+- [配置管理](../reference/DASMatrix/config/index.md)
 
 ---
 

@@ -1,6 +1,6 @@
 """执行计划优化器。负责将逻辑计算图转换为物理执行计划，实施算子融合。"""
 
-from typing import List, Set, cast, Optional
+from typing import List, Optional, Set, cast
 
 from ...core.computation_graph import (
     ComputationGraph,

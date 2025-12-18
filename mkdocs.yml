@@ -48,6 +48,12 @@ plugins:
             merge_init_into_class: true
             show_signature_annotations: true
             separate_signature: true
+  - gen-files:
+      scripts:
+        - scripts/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -63,13 +69,4 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - 首页: index.md
-  - 快速开始: quickstart.md
-  - API 文档:
-      - 概述: api/index.md
-      - DASFrame: api/dasframe.md
-      - 数据读取: api/reader.md
-      - 信号处理: api/processing.md
-      - 可视化: api/visualization.md
-      - 计算图: api/computation_graph.md
-  - 贡献指南: contributing.md
+  - ... | SUMMARY.md

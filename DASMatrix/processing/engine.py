@@ -6,7 +6,7 @@
 - 递归执行计算图节点
 """
 
-from typing import Any, List, Optional
+from typing import Any, List
 
 import numpy as np
 from scipy import signal as scipy_signal
@@ -210,31 +210,31 @@ class HybridEngine:
             v_min = kwargs.get("v_min")
             v_max = kwargs.get("v_max")
             dx = kwargs.get("dx", 1.0)
-            fs = kwargs.get("fs", 1000) # Should verify if fs is passed or available
+            fs = kwargs.get("fs", 1000)  # Should verify if fs is passed or available
 
             # FK Transform
             nt, nx = data.shape
             fk = np.fft.fftshift(np.fft.fft2(data))
-            
+
             # Axes
             freqs = np.fft.fftshift(np.fft.fftfreq(nt, 1.0 / fs))
             k = np.fft.fftshift(np.fft.fftfreq(nx)) / dx
-            
+
             # Meshgrid
             K, F = np.meshgrid(k, freqs)
-            
+
             # Masking
-            with np.errstate(divide='ignore', invalid='ignore'):
+            with np.errstate(divide="ignore", invalid="ignore"):
                 V = F / K
-            
+
             mask = np.ones_like(fk, dtype=bool)
             if v_min is not None:
                 mask &= (np.abs(V) >= abs(v_min)) | np.isnan(V)
             if v_max is not None:
                 mask &= (np.abs(V) <= abs(v_max)) | np.isnan(V)
-                
+
             fk_filtered = fk * mask
-            
+
             # Inverse Transform
             return np.fft.ifft2(np.fft.ifftshift(fk_filtered)).real
 

@@ -75,7 +75,7 @@ class NumbaBackend:
                 x_var_sum = np.sum((x - x_mean) ** 2)
 
                 y_mean = np.mean(data, axis=0)
-                # xy_cov_sum = np.sum((x - x_mean)[:, None] * (data - y_mean), axis=0) # Slow?
+                # xy_cov_sum = np.sum((x - x_mean)[:, None] * (data - y_mean), axis=0)
                 # Faster: dot product
 
                 # X_centered shape: (N,)

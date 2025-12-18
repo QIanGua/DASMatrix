@@ -3,7 +3,7 @@
 提供多种 DAS 数据格式的读取功能。
 """
 
-from .das_reader import DASReader, DataType, DataReader, DATReader, H5Reader
+from .das_reader import DASReader, DataReader, DataType, DATReader, H5Reader
 
 __all__ = [
     "DASReader",

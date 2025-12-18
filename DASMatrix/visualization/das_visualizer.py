@@ -3,6 +3,8 @@ from abc import ABC
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 
 from ..config.visualization_config import VisualizationConfig
@@ -200,6 +202,7 @@ class SpectrumPlot(PlotBase):
         title: Optional[str] = None,
         peaks: Optional[List[Dict[str, float]]] = None,
         db_range: Optional[Tuple[float, float]] = None,
+        ax: Optional[plt.Axes] = None,
     ) -> Any:  # 返回类型改为 Any
         """绘制频谱图
 
@@ -211,13 +214,11 @@ class SpectrumPlot(PlotBase):
             title: 自定义标题 (英文), 若未指定则使用默认标题
             peaks: (可选) 峰值列表，每个峰值包含 'frequency' 和 'magnitude'
             db_range: 可选，dB值显示范围 (min_db, max_db)
+            ax: 可选的 Axes 对象
 
         Returns:
             Figure: matplotlib 图形对象
         """
-        # 延迟导入 matplotlib
-        import matplotlib.pyplot as plt
-        import matplotlib.ticker as ticker
 
         # 性能优化：如果频率点数过多，进行降采样
         MAX_FREQ_POINTS = 10000
@@ -227,7 +228,10 @@ class SpectrumPlot(PlotBase):
             magnitudes = magnitudes[::step]
 
         # 创建图形和坐标轴 - 优化创建过程
-        fig, ax = plt.subplots(figsize=self.config.figsize_standard)
+        if ax is None:
+            fig, ax = plt.subplots(figsize=self.config.figsize_standard)
+        else:
+            fig = ax.figure  # type: ignore
 
         # 性能优化：提前计算dB值，避免重复计算
         # 幅值通常以 dB 显示
@@ -373,6 +377,7 @@ class WaveformPlot(PlotBase):
         amplitude_range: Optional[Tuple[float, float]] = None,
         title: Optional[str] = None,
         highlight_regions: Optional[List[Tuple[float, float]]] = None,
+        ax: Optional[plt.Axes] = None,
     ) -> Any:  # 返回类型改为 Any
         """绘制时域波形图
 
@@ -455,7 +460,10 @@ class WaveformPlot(PlotBase):
             plot_amplitude_data = amplitude_data
 
         # 创建具有黄金比例的图形 - 优化图形创建过程
-        fig, ax = plt.subplots(figsize=self.config.figsize_wide)
+        if ax is None:
+            fig, ax = plt.subplots(figsize=self.config.figsize_wide)
+        else:
+            fig = ax.figure  # type: ignore
 
         # 绘制波形 - 直接绘制，无需计算统计信息
         # 性能优化：使用更高效的线条渲染，减少中间计算
@@ -561,6 +569,7 @@ class SpectrogramPlot(PlotBase):
         freq_range: Optional[Tuple[float, float]] = None,
         time_range: Optional[Tuple[float, float]] = None,
         cmap: str = "inferno",
+        ax: Optional[plt.Axes] = None,
     ) -> Any:
         """绘制时频谱图（短时傅里叶变换）
 
@@ -602,7 +611,10 @@ class SpectrogramPlot(PlotBase):
             fs = fs / downsample_factor
 
         # 创建图形和坐标轴 - 优化创建过程
-        fig, ax = plt.subplots(figsize=self.config.figsize_standard)
+        if ax is None:
+            fig, ax = plt.subplots(figsize=self.config.figsize_standard)
+        else:
+            fig = ax.figure  # type: ignore
 
         # 计算窗口重叠点数
         noverlap = int(window_size * overlap)
@@ -716,6 +728,7 @@ class WaterfallPlot(PlotBase):
         x_ticks: Optional[np.ndarray] = None,
         y_ticks: Optional[np.ndarray] = None,
         value_range: Optional[Tuple[float, float]] = None,
+        ax: Optional[plt.Axes] = None,
     ) -> Any:
         """绘制瀑布图（二维数据可视化）
 
@@ -740,7 +753,10 @@ class WaterfallPlot(PlotBase):
         import matplotlib.pyplot as plt
 
         # 创建图形和坐标轴
-        fig, ax = plt.subplots(figsize=self.config.figsize_wide)
+        if ax is None:
+            fig, ax = plt.subplots(figsize=self.config.figsize_wide)
+        else:
+            fig = ax.figure  # type: ignore
 
         # 确定数据显示范围
         if value_range is None:
@@ -924,6 +940,7 @@ class DASVisualizer:
         file_name: Optional[str] = None,
         title: Optional[str] = None,
         highlight_regions: Optional[List[Tuple[float, float]]] = None,
+        ax: Optional[plt.Axes] = None,
     ) -> Any:
         """绘制时域波形图
 
@@ -964,6 +981,7 @@ class DASVisualizer:
             amplitude_range=amplitude_range,
             title=title,
             highlight_regions=highlight_regions,
+            ax=ax,
         )
 
         # 如果提供了文件名，则保存图片
@@ -987,6 +1005,7 @@ class DASVisualizer:
         peaks: Optional[List[Dict[str, float]]] = None,
         freq_range: Optional[Tuple[float, float]] = None,
         db_range: Optional[Tuple[float, float]] = None,
+        ax: Optional[plt.Axes] = None,
     ) -> Any:
         """绘制并保存频谱图
 
@@ -1063,6 +1082,7 @@ class DASVisualizer:
             title=title,
             peaks=peaks,
             db_range=db_range,
+            ax=ax,
         )
 
         # 如果提供了文件名，则保存图片
@@ -1088,6 +1108,7 @@ class DASVisualizer:
         freq_range: Optional[Tuple[float, float]] = None,
         time_range: Optional[Tuple[float, float]] = None,
         cmap: str = "viridis",
+        ax: Optional[plt.Axes] = None,
     ) -> Any:
         """绘制时频图（短时傅里叶变换）
 
@@ -1139,6 +1160,7 @@ class DASVisualizer:
             freq_range=freq_range,
             time_range=time_range,
             cmap=cmap,
+            ax=ax,
         )
 
         # 如果提供了文件名，则保存图片
@@ -1167,6 +1189,7 @@ class DASVisualizer:
         x_ticks: Optional[np.ndarray] = None,
         y_ticks: Optional[np.ndarray] = None,
         value_range: Optional[Tuple[float, float]] = None,
+        ax: Optional[plt.Axes] = None,
     ) -> Any:
         """绘制瀑布图（二维数据可视化）
 
@@ -1217,6 +1240,7 @@ class DASVisualizer:
             x_ticks=x_ticks,
             y_ticks=y_ticks,
             value_range=value_range,
+            ax=ax,
         )
 
         # 如果提供了文件名，则保存图片
@@ -1231,6 +1255,7 @@ class DASVisualizer:
         # 处理图形显示，避免双重显示
         return self._handle_figure_display(fig)
 
+
 class FKPlot(PlotBase):
     """F-K 谱图 (F-K Spectrum Plot) 绘图类"""
 
@@ -1243,6 +1268,7 @@ class FKPlot(PlotBase):
         cmap: str = "turbo",
         db_range: Optional[Tuple[float, float]] = None,
         v_lines: Optional[List[float]] = None,
+        ax: Optional[plt.Axes] = None,
     ) -> Any:
         """绘制 F-K 谱图
 
@@ -1254,19 +1280,20 @@ class FKPlot(PlotBase):
             cmap: 色彩映射
             db_range: 显示范围 (min_db, max_db)
             v_lines: 待标记的速度线 (m/s)
+            ax: 可选的 Axes 对象
 
         Returns:
             Figure: matplotlib 图形对象
         """
-        import matplotlib.pyplot as plt
-        import matplotlib.colors as colors
-
-        fig, ax = plt.subplots(figsize=self.config.figsize_standard)
+        if ax is None:
+            fig, ax = plt.subplots(figsize=self.config.figsize_standard)
+        else:
+            fig = ax.figure  # type: ignore
 
         # 计算幅度谱 (dB)
         mag = np.abs(fk_spectrum)
         mag_db = 20 * np.log10(mag + 1e-12)
-        
+
         # 归一化 dB
         mag_db = mag_db - np.max(mag_db)
 
@@ -1280,49 +1307,60 @@ class FKPlot(PlotBase):
         # 绘制
         # 使用 pcolormesh 或 imshow
         # 注意：imshow 需要 origin='lower' 且 extent 正确
-        extent = [wavenumbers[0], wavenumbers[-1], freqs[0], freqs[-1]]
-        
+        extent = (
+            float(wavenumbers[0]),
+            float(wavenumbers[-1]),
+            float(freqs[0]),
+            float(freqs[-1]),
+        )
+
         im = ax.imshow(
             mag_db,
             extent=extent,
-            origin='lower',
-            aspect='auto',
+            origin="lower",
+            aspect="auto",
             cmap=cmap,
             vmin=vmin,
             vmax=vmax,
-            interpolation='nearest'
+            interpolation="nearest",
         )
-        
+
         cbar = fig.colorbar(im, ax=ax)
         cbar.set_label("Amplitude (dB)")
-        
+
         ax.set_xlabel("Wavenumber (1/m)")
         ax.set_ylabel("Frequency (Hz)")
-        
+
         if title:
             ax.set_title(title, fontweight="bold")
         else:
             ax.set_title("F-K Spectrum", fontweight="bold")
-            
+
         # 绘制速度线 f = v * k
         if v_lines:
             k_min, k_max = wavenumbers[0], wavenumbers[-1]
             f_min, f_max = freqs[0], freqs[-1]
-            
+
             k_line = np.linspace(k_min, k_max, 100)
-            
+
             for v in v_lines:
                 f_line = v * k_line
-                
+
                 # 只绘制在频率范围内的部分
                 mask = (f_line >= f_min) & (f_line <= f_max)
                 if np.any(mask):
-                    ax.plot(k_line[mask], f_line[mask], 'w--', alpha=0.7, linewidth=1)
+                    ax.plot(k_line[mask], f_line[mask], "w--", alpha=0.7, linewidth=1)
                     # 标注速度
                     # 找一个合适的位置标注
                     idx = len(k_line) // 2
                     if mask[idx]:
-                        ax.text(k_line[idx], f_line[idx], f"{v} m/s", color='white', fontsize=8)
+                        ax.text(
+                            k_line[idx],
+                            f_line[idx],
+                            f"{v} m/s",
+                            color="white",
+                            fontsize=8,
+                        )
 
         fig.tight_layout()
         return fig

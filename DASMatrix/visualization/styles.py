@@ -4,10 +4,10 @@
 """
 
 import contextlib
-from typing import Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
-import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import matplotlib.pyplot as plt
 import numpy as np
 
 from ..config.visualization_config import (
@@ -76,7 +76,7 @@ def create_figure(
     nrows: int = 1,
     ncols: int = 1,
     config: Optional[VisualizationConfig] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> Tuple[plt.Figure, np.ndarray]:
     """创建期刊级别的图形
 
@@ -204,12 +204,12 @@ def setup_axis(
 
 def add_colorbar(
     fig: plt.Figure,
-    mappable,
+    mappable: plt.cm.ScalarMappable,
     ax: plt.Axes,
     label: Optional[str] = None,
     config: Optional[VisualizationConfig] = None,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Any:
     """添加专业格式的颜色条
 
     Args:
@@ -221,7 +221,7 @@ def add_colorbar(
         **kwargs: 传递给 colorbar 的其他参数
 
     Returns:
-        Colorbar 对象
+        matplotlib.colorbar.Colorbar: Colorbar 对象
     """
     if config is None:
         config = VisualizationConfig()
@@ -251,7 +251,7 @@ def save_figure(
     filename: str,
     formats: Tuple[str, ...] = ("pdf", "png"),
     config: Optional[VisualizationConfig] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     """保存图形为多种格式
 
@@ -413,7 +413,8 @@ def add_significance_bracket(
 
     Args:
         ax: Axes 对象
-        x1, x2: 括号起止 X 坐标
+        x1: 括号起始 X 坐标
+        x2: 括号终止 X 坐标
         y: 括号 Y 坐标
         text: 显著性标记（*, **, ***）
         color: 颜色

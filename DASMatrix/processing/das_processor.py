@@ -296,7 +296,11 @@ class DASProcessor:
                 }
             )
 
-    def f_k_transform(self, data: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        return analysis_results
+
+    def f_k_transform(
+        self, data: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """执行二维傅里叶变换 (F-K 变换)
 
         Args:
@@ -309,15 +313,17 @@ class DASProcessor:
                 - wavenumbers: 波数轴 (1/m) 注意：需要知道空间采样率，此处暂假设 dx=1
         """
         nt, nx = data.shape
-        
+
         # 对时间和空间维度进行 FFT
         # 移位将零频移到中心
         fk = np.fft.fftshift(np.fft.fft2(data))
-        
+
         # 计算坐标轴
         freqs = np.fft.fftshift(np.fft.fftfreq(nt, 1.0 / self.fs))
-        wavenumbers = np.fft.fftshift(np.fft.fftfreq(nx))  # 标准化波数，实际波数需除以 d_x
-        
+        wavenumbers = np.fft.fftshift(
+            np.fft.fftfreq(nx)
+        )  # 标准化波数，实际波数需除以 d_x
+
         return fk, freqs, wavenumbers
 
     def iwf_k_transform(self, fk_spectrum: np.ndarray) -> np.ndarray:
@@ -335,11 +341,11 @@ class DASProcessor:
         return data
 
     def FKFilter(
-        self, 
-        data: np.ndarray, 
-        v_min: Optional[float] = None, 
+        self,
+        data: np.ndarray,
+        v_min: Optional[float] = None,
         v_max: Optional[float] = None,
-        dx: float = 1.0
+        dx: float = 1.0,
     ) -> np.ndarray:
         """应用 F-K 滤波器（速度滤波）
 
@@ -356,33 +362,33 @@ class DASProcessor:
         """
         nt, nx = data.shape
         fk, freqs, k = self.f_k_transform(data)
-        
+
         # 调整波数轴为物理单位 (1/m)
         k = k / dx
-        
+
         # 创建网格
         K, F = np.meshgrid(k, freqs)
-        
+
         # 计算视速度 V = f / k
         # 注意处理 k=0 的情况
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             V = F / K
-            
+
         # 创建掩码
         mask = np.ones_like(fk, dtype=bool)
-        
+
         if v_min is not None:
             # 仅保留速度大于 v_min 的波 (或小于 -v_min，对称)
             # 实际上 FK 滤波通常定义为一个扇区
             # 这里简单实现：保留 abs(V) >= v_min
             mask &= (np.abs(V) >= abs(v_min)) | np.isnan(V)
-            
+
         if v_max is not None:
-             # 保留 abs(V) <= v_max
+            # 保留 abs(V) <= v_max
             mask &= (np.abs(V) <= abs(v_max)) | np.isnan(V)
-            
+
         # 应用掩码
         fk_filtered = fk * mask
-        
+
         # 逆变换
         return self.iwf_k_transform(fk_filtered)

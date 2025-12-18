@@ -2,7 +2,10 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from .dasframe import DASFrame
 
 import h5py
 import numpy as np
@@ -12,7 +15,7 @@ from ..config.sampling_config import SamplingConfig
 
 
 # 避免循环导入
-def _create_dasframe(data: np.ndarray, fs: float, **kwargs):
+def _create_dasframe(data: Any, fs: float, **kwargs: Any) -> "DASFrame":
     """创建 DASFrame 对象（延迟导入避免循环依赖）"""
     from .dasframe import DASFrame
 
@@ -24,8 +27,8 @@ def read(
     fs: Optional[float] = None,
     channels: Optional[int] = None,
     byte_order: str = "little",
-    **kwargs,
-):
+    **kwargs: Any,
+) -> "DASFrame":
     """从文件读取DAS数据，返回DASFrame对象。
 
     Args:
@@ -151,7 +154,7 @@ def _read_dat(
     return _create_dasframe(raw_data, fs=fs, source_file=str(path), **kwargs)
 
 
-def from_array(data: np.ndarray, fs: float, **kwargs):
+def from_array(data: np.ndarray, fs: float, **kwargs: Any) -> "DASFrame":
     """从NumPy数组创建DASFrame对象。
 
     Args:
@@ -174,7 +177,9 @@ def from_array(data: np.ndarray, fs: float, **kwargs):
     return _create_dasframe(data, fs=fs, **kwargs)
 
 
-def stream(url: str, chunk: int = 1024, fs: float = 10000.0, **kwargs):
+def stream(
+    url: str, chunk: int = 1024, fs: float = 10000.0, **kwargs: Any
+) -> "DASFrame":
     """创建用于流式处理的DASFrame。
 
     Args:

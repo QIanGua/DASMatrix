@@ -1,17 +1,23 @@
-"""DASFrame based on Xarray and Dask."""
-from typing import Any, Optional, Union, List, Tuple, cast
+import builtins
+from typing import Any, List, Optional, Tuple, Union, cast
 
 import dask.array as da
+import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 from scipy import signal
-import matplotlib.pyplot as plt
+
 
 class DASFrame:
     """DAS 数据处理核心类 (Xarray/Dask Backend)。
 
     所有信号处理操作基于 xarray 和 dask 进行延迟计算。
     """
+
+    _data: xr.DataArray
+    _fs: float
+    _dx: float
+    _metadata: dict[str, Any]
 
     def __init__(
         self,
@@ -29,12 +35,12 @@ class DASFrame:
             **metadata: Additional metadata.
         """
         if isinstance(data, DASFrame):
-             # Copy constructor roughly
-             self._data = data._data
-             self._fs = data.fs
-             self._dx = getattr(data, "_dx", dx)
-             self._metadata = {**data._metadata, **metadata}
-             return
+            # Copy constructor roughly
+            self._data = data._data
+            self._fs = data.fs
+            self._dx = getattr(data, "_dx", dx)
+            self._metadata = {**data._metadata, **metadata}
+            return
 
         self._fs = fs
         self._dx = dx
@@ -49,7 +55,7 @@ class DASFrame:
             # Wrap numpy/dask array into xarray
             # Assume dims are (time, channel)
             if not isinstance(data, (np.ndarray, da.Array)):
-                 data = np.asarray(data)
+                data = np.asarray(data)
 
             # Create coordinates
             nt, nx = data.shape
@@ -57,19 +63,15 @@ class DASFrame:
                 "time": np.arange(nt) / fs,
                 "distance": np.arange(nx) * dx,
             }
-            
+
             self._data = xr.DataArray(
                 data,
                 dims=("time", "distance"),
                 coords=coords,
                 name="das_strain",
-                attrs={
-                    "fs": fs,
-                    "dx": dx,
-                    **metadata
-                }
+                attrs={"fs": fs, "dx": dx, **metadata},
             )
-            
+
             # Ensure it is chunked (dask backed) if it isn't already
             if not self._data.chunks:
                 self._data = self._data.chunk({"time": "auto", "distance": -1})
@@ -78,7 +80,7 @@ class DASFrame:
     def data(self) -> xr.DataArray:
         """Access underlying xarray DataArray."""
         return self._data
-    
+
     @property
     def fs(self) -> float:
         return self._fs
@@ -100,18 +102,20 @@ class DASFrame:
         return DASFrame(sliced, self._fs, self._dx, **self._metadata)
 
     # --- Signal Operations ---
-    
+
     def bandpass(self, low: float, high: float, order: int = 4) -> "DASFrame":
         """Apply bandpass filter using dask map_overlap or map_blocks."""
-        
+
         def _filter_func(block, fs, low, high, order):
             nyq = 0.5 * fs
-            sos = signal.butter(order, [low / nyq, high / nyq], btype="band", output="sos")
+            sos = signal.butter(
+                order, [low / nyq, high / nyq], btype="band", output="sos"
+            )
             # Apply along the last axis (core dimension moved to end by apply_ufunc)
             return signal.sosfiltfilt(sos, block, axis=-1)
 
         data_contiguous_time = self._data.chunk({"time": -1})
-        
+
         filtered = xr.apply_ufunc(
             _filter_func,
             data_contiguous_time,
@@ -119,13 +123,14 @@ class DASFrame:
             input_core_dims=[["time"]],
             output_core_dims=[["time"]],
             dask="parallelized",
-            output_dtypes=[data_contiguous_time.dtype]
+            output_dtypes=[data_contiguous_time.dtype],
         )
-        
+
         return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
     def lowpass(self, cutoff: float, order: int = 4) -> "DASFrame":
         """Apply lowpass filter."""
+
         def _filter_func(block, fs, cutoff, order):
             nyq = 0.5 * fs
             sos = signal.butter(order, cutoff / nyq, btype="low", output="sos")
@@ -139,7 +144,7 @@ class DASFrame:
             input_core_dims=[["time"]],
             output_core_dims=[["time"]],
             dask="parallelized",
-            output_dtypes=[data_contiguous_time.dtype]
+            output_dtypes=[data_contiguous_time.dtype],
         )
         return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
@@ -184,23 +189,24 @@ class DASFrame:
 
     def detrend(self, axis: str = "time") -> "DASFrame":
         """Detrend data."""
+
         def _detrend_func(data):
             return signal.detrend(data, axis=-1)
-            
+
         if axis == "time":
-             data = self._data.chunk({"time": -1})
+            data = self._data.chunk({"time": -1})
         else:
-             data = self._data.chunk({"distance": -1})
-             
+            data = self._data.chunk({"distance": -1})
+
         detrended = xr.apply_ufunc(
             _detrend_func,
             data,
             input_core_dims=[[axis]],
             output_core_dims=[[axis]],
             dask="parallelized",
-            output_dtypes=[data.dtype]
+            output_dtypes=[data.dtype],
         )
-        
+
         return DASFrame(detrended, self._fs, self._dx, **self._metadata)
 
     def demean(self, axis: str = "time") -> "DASFrame":
@@ -270,6 +276,7 @@ class DASFrame:
 
     def fft(self) -> "DASFrame":
         """快速傅立叶变换，计算频谱幅度。"""
+
         def _fft_func(data):
             return np.abs(np.fft.fft(data, axis=-1))
 
@@ -334,7 +341,7 @@ class DASFrame:
         f, t, Zxx = signal.stft(
             data, fs=self._fs, nperseg=nperseg, noverlap=noverlap, axis=0
         )
-        
+
         # 将 Zxx 从 (freq, distance, time) 转换为 (freq, time, distance)
         Zxx_abs = np.abs(Zxx).transpose(0, 2, 1)
 
@@ -360,8 +367,8 @@ class DASFrame:
     ) -> "DASFrame":
         """F-K 滤波 (速度滤波)。"""
         data = self.collect()
-        from ..processing.das_processor import DASProcessor
         from ..config.sampling_config import SamplingConfig
+        from ..processing.das_processor import DASProcessor
 
         config = SamplingConfig(fs=self._fs, channels=data.shape[1])
         processor = DASProcessor(config)
@@ -409,14 +416,68 @@ class DASFrame:
         ax.grid(True, alpha=0.3)
         return fig
 
+    def plot_spectrum(
+        self,
+        ch: int = 0,
+        title: str = "Spectrum",
+        ax: Optional[plt.Axes] = None,
+        **kwargs: Any,
+    ) -> plt.Figure:
+        """绘制频谱图 (FFT)。"""
+        data = self.collect()
+        ch_data = data[:, ch]
+
+        from ..visualization.das_visualizer import SpectrumPlot
+
+        plotter = SpectrumPlot()
+        # 计算频谱 (Welch 方法)
+        from scipy import signal
+
+        n = len(ch_data)
+        nperseg = min(2048, n // 4)
+        freqs, psd = signal.welch(
+            ch_data, fs=self._fs, nperseg=nperseg, scaling="spectrum"
+        )
+        mags = np.sqrt(psd)
+
+        fig = plotter.plot(freqs, mags, title=title, ax=ax, **kwargs)
+        return fig
+
+    def plot_spectrogram(
+        self,
+        ch: int = 0,
+        title: str = "Spectrogram",
+        window_size: int = 1024,
+        overlap: float = 0.75,
+        ax: Optional[plt.Axes] = None,
+        **kwargs: Any,
+    ) -> plt.Figure:
+        """绘制时频图 (STFT)。"""
+        data = self.collect()
+        ch_data = data[:, ch]
+
+        from ..visualization.das_visualizer import SpectrogramPlot
+
+        plotter = SpectrogramPlot()
+        fig = plotter.plot(
+            ch_data,
+            self._fs,
+            window_size=window_size,
+            overlap=overlap,
+            title=title,
+            ax=ax,
+            **kwargs,
+        )
+        return fig
+
     def plot_heatmap(
         self,
-        channels: Optional[slice] = None,
-        t_range: Optional[slice] = None,
+        channels: Optional[builtins.slice] = None,
+        t_range: Optional[builtins.slice] = None,
         title: str = "DAS Waterfall",
         cmap: str = "RdBu_r",
         ax: Optional[plt.Axes] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> plt.Figure:
         """绘制热图（瀑布图）。
 
@@ -487,25 +548,18 @@ class DASFrame:
         **kwargs: Any,
     ) -> plt.Figure:
         data = self.collect()
-        
-        from ..processing.das_processor import DASProcessor
+
         from ..config.sampling_config import SamplingConfig
-        
+        from ..processing.das_processor import DASProcessor
+
         config = SamplingConfig(fs=self._fs, channels=data.shape[1])
         processor = DASProcessor(config)
-        
+
         fk, freqs, k = processor.f_k_transform(data)
         k = k / dx
-        
+
         from ..visualization.das_visualizer import FKPlot
-        
+
         plotter = FKPlot()
-        fig = plotter.plot(
-            fk, 
-            freqs, 
-            k, 
-            title=title, 
-            v_lines=v_lines, 
-            **kwargs
-        )
+        fig = plotter.plot(fk, freqs, k, title=title, v_lines=v_lines, **kwargs)
         return fig
