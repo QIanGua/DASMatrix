@@ -99,7 +99,7 @@ def demo_spectrogram():
     data = create_synthetic_das_data()
     frame = DASFrame(data, fs=1000)
 
-    fig = frame.plot_spec(title="DAS Spectrogram")
+    fig = frame.plot_spectrum(title="DAS Spectrogram")
 
     save_figure(fig, "output/demo_spectrogram", formats=("png",))
     plt.close(fig)

@@ -58,14 +58,14 @@ def simulate_das_stream(
 def process_chunk(
     chunk: np.ndarray,
     fs: float,
-    threshold_db: float = -20,
+    sigma: float = 3.0,
 ) -> dict:
     """处理单个数据块
 
     Args:
         chunk: 输入数据块
         fs: 采样频率
-        threshold_db: 检测阈值 (dB)
+        sigma: 检测阈值 (标准差倍数)
 
     Returns:
         处理结果字典
@@ -73,14 +73,13 @@ def process_chunk(
     frame = from_array(chunk, fs=fs)
 
     # 处理流程
-    processed = frame.bandpass(low=10, high=200).hilbert_env()
+    processed = frame.bandpass(low=10, high=200).envelope()
 
-    # 事件检测
-    events = processed.threshold_detect(db=threshold_db)
+    # 事件检测 - threshold_detect 返回 numpy 数组
+    event_mask = processed.threshold_detect(sigma=sigma)
 
-    # 收集结果
+    # 收集包络数据
     env_data = processed.collect()
-    event_mask = events.collect()
 
     # 统计
     n_events = np.sum(event_mask) if event_mask.any() else 0
@@ -136,9 +135,30 @@ def realtime_monitoring_demo(
         result = process_chunk(chunk, fs=fs)
         proc_time = (time.time() - start_time) * 1000
 
-        # 记录事件
+        # 记录事件并保存事件图
         if result["n_events"] > 0:
             all_events.append({"time": i * chunk_duration, "count": result["n_events"]})
+            
+            # 保存事件图
+            event_fig, event_ax = plt.subplots(figsize=(8, 5), constrained_layout=True)
+            im = event_ax.imshow(
+                result["envelope"].T,
+                aspect="auto",
+                origin="lower",
+                cmap="hot",
+                extent=[0, chunk_duration, 0, n_channels],
+            )
+            event_ax.set_title(
+                f"事件检测 - 块 {i + 1} @ {i * chunk_duration:.1f}s\n"
+                f"事件数: {result['n_events']}, 最大幅值: {result['max_amplitude']:.3f}"
+            )
+            event_ax.set_xlabel("Time (s)")
+            event_ax.set_ylabel("Channel")
+            event_fig.colorbar(im, ax=event_ax, label="Amplitude")
+            
+            event_path = f"output/events/event_block_{i + 1:03d}.png"
+            event_fig.savefig(event_path, dpi=150)
+            plt.close(event_fig)
 
         # 回调
         if callback:
@@ -190,4 +210,5 @@ if __name__ == "__main__":
     import os
 
     os.makedirs("output", exist_ok=True)
+    os.makedirs("output/events", exist_ok=True)
     realtime_monitoring_demo(duration=5.0)
