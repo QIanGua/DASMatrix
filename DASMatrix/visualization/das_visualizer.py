@@ -891,6 +891,7 @@ class DASVisualizer:
         self.spectrum_plotter = SpectrumPlot(self.config)
         self.spectrogram_plotter = SpectrogramPlot(self.config)
         self.waterfall_plotter = WaterfallPlot(self.config)
+        self.profile_plotter = ProfilePlot(self.config)
 
         # 检测是否在 Jupyter 环境中
         self._in_jupyter = self._check_jupyter()
@@ -1255,6 +1256,48 @@ class DASVisualizer:
         # 处理图形显示，避免双重显示
         return self._handle_figure_display(fig)
 
+    def ProfilePlot(
+        self,
+        values: np.ndarray,
+        distances: Optional[np.ndarray] = None,
+        title: Optional[str] = None,
+        xlabel: str = "Distance (m)",
+        ylabel: str = "Amplitude",
+        file_name: Optional[str] = None,
+        ax: Optional[plt.Axes] = None,
+        **kwargs: Any,
+    ) -> Any:
+        """绘制并保存剖面图（跨通道指标图）
+
+        Args:
+            values: 一维数组，包含每个通道的指标值
+            distances: 可选，一维数组，包含每个通道对应的空间位置
+            title: 自定义标题
+            xlabel: X轴标签
+            ylabel: Y轴标签
+            file_name: 保存的文件名 (不含扩展名)，若提供则保存图片
+            ax: 可选，指定的 matplotlib Axes 对象
+            **kwargs: 传递给 ax.plot 的其他参数
+
+        Returns:
+            Figure: matplotlib 图形对象
+        """
+        fig = self.profile_plotter.plot(
+            values=values,
+            distances=distances,
+            title=title,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            ax=ax,
+            **kwargs,
+        )
+
+        if file_name is not None:
+            save_path = self.output_path / f"{file_name}.png"
+            self.profile_plotter.save_figure(save_path, close_after_save=False)
+
+        return self._handle_figure_display(fig)
+
 
 class FKPlot(PlotBase):
     """F-K 谱图 (F-K Spectrum Plot) 绘图类"""
@@ -1361,6 +1404,76 @@ class FKPlot(PlotBase):
                             color="white",
                             fontsize=8,
                         )
+
+        fig.tight_layout()
+        return fig
+
+
+class ProfilePlot(PlotBase):
+    """剖面图 (Profile Plot) 绘图类，用于展示沿光缆分布的指标
+    （如 RMS、均值、最大值等）
+    """
+
+    def plot(
+        self,
+        values: np.ndarray,
+        distances: Optional[np.ndarray] = None,
+        title: Optional[str] = None,
+        xlabel: str = "Distance (m)",
+        ylabel: str = "Amplitude",
+        label: Optional[str] = None,
+        color: Optional[str] = None,
+        ax: Optional[plt.Axes] = None,
+        **kwargs: Any,
+    ) -> plt.Figure:
+        """绘制剖面图
+
+        Args:
+            values: 1D 数组，包含每个通道的指标值
+            distances: 可选，空间距离轴（米）
+            title: 图标题
+            xlabel: X轴标签
+            ylabel: Y轴标签
+            label: 图例标签
+            color: 线条颜色
+            ax: 可选，指定的 matplotlib Axes 对象
+            **kwargs: 传递给 ax.plot 的其他参数
+        """
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 4))
+        else:
+            if ax.figure is None:
+                raise ValueError("Provided ax must belong to a figure")
+            from typing import cast
+
+            fig = cast(plt.Figure, ax.figure)
+
+        if distances is None:
+            distances = np.arange(len(values))
+            if xlabel == "Distance (m)":
+                xlabel = "Channel Index"
+
+        # 使用点线图展示，这是 DAS 剖面图的标准做法
+        ax.plot(
+            distances,
+            values,
+            "o-",
+            markersize=3,
+            linewidth=1,
+            label=label,
+            color=color,
+            **kwargs,
+        )
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        if title:
+            ax.set_title(title)
+
+        ax.grid(True, linestyle="--", alpha=0.5)
+
+        if label:
+            ax.legend()
 
         fig.tight_layout()
         return fig

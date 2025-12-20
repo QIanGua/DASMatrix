@@ -563,3 +563,69 @@ class DASFrame:
         plotter = FKPlot()
         fig = plotter.plot(fk, freqs, k, title=title, v_lines=v_lines, **kwargs)
         return fig
+
+    def plot_profile(
+        self,
+        stat: str = "rms",
+        title: Optional[str] = None,
+        ylabel: Optional[str] = None,
+        ax: Optional[plt.Axes] = None,
+        **kwargs: Any,
+    ) -> plt.Figure:
+        """绘制空间剖面图（如 RMS, Mean, Std 等）。
+
+        Args:
+            stat: 统计指标类型, 'rms', 'mean', 'std', 'max', 'min'
+            title: 图标题
+            ylabel: Y轴标签
+            ax: 可选的 matplotlib Axes 对象
+            **kwargs: 传递给 ProfilePlot.plot 的其他参数
+        """
+        if stat == "rms":
+            values = self.rms()
+            default_title = "RMS Profile"
+            default_ylabel = "RMS Amplitude"
+        elif stat == "mean":
+            values = self.mean(axis=0).flatten()
+            default_title = "Mean Profile"
+            default_ylabel = "Mean Amplitude"
+        elif stat == "std":
+            values = self.std(axis=0).flatten()
+            default_title = "Standard Deviation Profile"
+            default_ylabel = "Std Amplitude"
+        elif stat == "max":
+            values = self.max(axis=0).flatten()
+            default_title = "Max Profile"
+            default_ylabel = "Max Amplitude"
+        elif stat == "min":
+            values = self.min(axis=0).flatten()
+            default_title = "Min Profile"
+            default_ylabel = "Min Amplitude"
+        else:
+            raise ValueError(f"Unsupported stat: {stat}")
+
+        from ..visualization.das_visualizer import ProfilePlot
+
+        plotter = ProfilePlot()
+        distances = self._data.distance.values
+
+        return plotter.plot(
+            values=values,
+            distances=distances,
+            title=title or default_title,
+            ylabel=ylabel or default_ylabel,
+            ax=ax,
+            **kwargs,
+        )
+
+    def plot_rms(self, **kwargs: Any) -> plt.Figure:
+        """绘制 RMS 剖面图。"""
+        return self.plot_profile(stat="rms", **kwargs)
+
+    def plot_mean(self, **kwargs: Any) -> plt.Figure:
+        """绘制均值剖面图。"""
+        return self.plot_profile(stat="mean", **kwargs)
+
+    def plot_std(self, **kwargs: Any) -> plt.Figure:
+        """绘制标准差剖面图。"""
+        return self.plot_profile(stat="std", **kwargs)

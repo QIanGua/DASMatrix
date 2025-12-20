@@ -88,6 +88,11 @@ processed.plot_spec(ch=0, title="Spectrogram")
 
 # FK 谱图
 processed.plot_fk(dx=1.0, v_lines=[1500, 3000], title="FK Spectrum")
+
+# 集成剖面图 (Profile Plots)
+processed.plot_rms(title="RMS Profile")
+processed.plot_mean(title="Mean Profile")
+processed.plot_std(title="Std Profile")
 ```
 
 ---
@@ -122,6 +127,9 @@ processed.plot_fk(dx=1.0, v_lines=[1500, 3000], title="FK Spectrum")
 | `max(axis)` | 最大值 |
 | `min(axis)` | 最小值 |
 | `rms()` | 均方根 |
+| `plot_rms()` | 绘制 RMS 剖面图 |
+| `plot_mean()` | 绘制均值剖面图 |
+| `plot_std()` | 绘制标准差剖面图 |
 
 ---
 
