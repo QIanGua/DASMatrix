@@ -4,6 +4,7 @@
 """
 
 import contextlib
+import logging
 import warnings
 from typing import Any, Optional, Tuple, Union
 
@@ -35,6 +36,9 @@ def apply_nature_style(config: Optional[VisualizationConfig] = None) -> None:
     # 抑制因字体回退导致的警告（例如 Arial 不含中文，但我们会回落到其他字体）
     warnings.filterwarnings("ignore", message=".*Glyph.*missing from current font.*")
     warnings.filterwarnings("ignore", message=".*Glyph.*missing from font.*")
+
+    # 抑制 Linux 下缺少 Arial 的日志噪音
+    logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
     # 重置为默认样式
     plt.style.use("default")

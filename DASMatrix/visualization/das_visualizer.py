@@ -26,11 +26,14 @@ class PlotBase(ABC):
     def _setup_style(self) -> None:
         """设置绘图风格"""
         # 延迟导入 matplotlib 和 seaborn
+        import logging
+
         import matplotlib.pyplot as plt
         import seaborn as sns
 
-        # 设置科学期刊级别的字体
-        font_family = "Arial"  # Nature/Science推荐字体
+        # 设置科学期刊级别的字体 - 使用 sans-serif 并配合 fallback 列表
+        logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
+        font_family = "sans-serif"
 
         # 设置专业科学绘图风格 - 顶级期刊标准
         plt.style.use("default")
@@ -81,6 +84,7 @@ class PlotBase(ABC):
                 "lines.solid_capstyle": "round",
                 # 字体设置 - 期刊标准
                 "font.family": font_family,
+                "font.sans-serif": self.config.get_rcparams()["font.sans-serif"],
                 "font.size": 11,
                 "font.weight": "normal",
                 "axes.labelsize": 12,
