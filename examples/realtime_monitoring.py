@@ -138,7 +138,7 @@ def realtime_monitoring_demo(
         # 记录事件并保存事件图
         if result["n_events"] > 0:
             all_events.append({"time": i * chunk_duration, "count": result["n_events"]})
-            
+
             # 保存事件图
             event_fig, event_ax = plt.subplots(figsize=(8, 5), constrained_layout=True)
             im = event_ax.imshow(
@@ -155,7 +155,7 @@ def realtime_monitoring_demo(
             event_ax.set_xlabel("Time (s)")
             event_ax.set_ylabel("Channel")
             event_fig.colorbar(im, ax=event_ax, label="Amplitude")
-            
+
             event_path = f"output/events/event_block_{i + 1:03d}.png"
             event_fig.savefig(event_path, dpi=150)
             plt.close(event_fig)

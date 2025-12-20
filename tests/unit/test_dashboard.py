@@ -3,12 +3,11 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import pytest
 
 matplotlib.use("Agg")  # 使用非交互式后端进行测试
 
-from DASMatrix.visualization import DASDashboard
 from DASMatrix.config import VisualizationConfig
+from DASMatrix.visualization import DASDashboard
 
 
 class TestDASDashboard:
@@ -28,10 +27,10 @@ class TestDASDashboard:
         chunk = np.random.randn(100, 64)
         events = np.zeros(100)
         events[50] = 1  # 模拟一个事件
-        
+
         # 应该能正常更新而不报错
         dashboard.update(chunk, events=events)
-        
+
         # 检查内部状态更新
         assert len(dashboard.metrics_history["times"]) == 1
         assert len(dashboard.event_log) == 1

@@ -251,12 +251,12 @@ class VisualizationConfig:
             "font.sans-serif": [
                 self.typography.cjk_family,  # 中文字体优先 (STHeiti)
                 "PingFang SC",  # macOS 苹方 (首选)
-                "Heiti SC",    # macOS 黑体 (首选)
-                "Songti SC",   # macOS 宋体
-                "STHeiti",     # macOS 华文黑体
-                "Heiti TC",    # macOS 黑体繁体
-                "Noto Sans CJK SC", # Linux 原生
-                "Noto Serif SC",    # Linux 原生
+                "Heiti SC",  # macOS 黑体 (首选)
+                "Songti SC",  # macOS 宋体
+                "STHeiti",  # macOS 华文黑体
+                "Heiti TC",  # macOS 黑体繁体
+                "Noto Sans CJK SC",  # Linux 原生
+                "Noto Serif SC",  # Linux 原生
                 "Microsoft YaHei",  # Windows 微软雅黑
                 self.typography.family,
                 "Helvetica",

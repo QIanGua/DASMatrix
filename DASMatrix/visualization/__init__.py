@@ -12,7 +12,6 @@ from .das_visualizer import (
     WaveformPlot,
 )
 from .dashboard import DASDashboard
-from .web.web_dashboard import DASWebDashboard
 from .styles import (
     add_colorbar,
     add_panel_label,
@@ -25,6 +24,7 @@ from .styles import (
     save_figure,
     setup_axis,
 )
+from .web.web_dashboard import DASWebDashboard
 
 __all__ = [
     # 可视化器

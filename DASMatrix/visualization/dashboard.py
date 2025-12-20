@@ -5,15 +5,15 @@
 
 import logging
 import time
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Optional
 
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Circle
 
-from .styles import apply_nature_style, setup_axis, add_colorbar
 from ..config.visualization_config import VisualizationConfig
+from .styles import add_colorbar, apply_nature_style, setup_axis
 
 
 class DASDashboard:
@@ -70,7 +70,7 @@ class DASDashboard:
             "time": "Time (s)",
             "channel": "Channel",
             "amplitude": "Amplitude",
-        }
+        },
     }
 
     def __init__(
@@ -111,34 +111,36 @@ class DASDashboard:
             "led_ok": "#00C853",
             "led_warn": "#FFD600",
             "led_error": "#FF1744",
-            "grid": "#222222"
+            "grid": "#222222",
         }
 
         # 数据缓冲区
         self.n_samples_buffer = int(buffer_duration * fs)
-        self.data_buffer = np.zeros((self.n_samples_buffer, n_channels))
-        
+        self.data_buffer: np.ndarray = np.zeros((self.n_samples_buffer, n_channels))
+
         # 指标历史
-        self.metrics_history = {"max": [], "rms": [], "times": []}
+        self.metrics_history: Dict[str, list] = {"max": [], "rms": [], "times": []}
         self.max_metrics_points = 100
-        self.event_log = []
+        self.event_log: list[str] = []
         self.start_timestamp = time.time()
 
         # 初始化图形 - 继承全局配置
         apply_nature_style(self.config)
-        
+
         # 微调深色主题设置，确保不覆盖中文字体列表
         cjk_fonts = plt.rcParams["font.sans-serif"]
-        plt.rcParams.update({
-            "figure.facecolor": self.colors["bg"],
-            "axes.facecolor": self.colors["panel"],
-            "axes.edgecolor": self.colors["border"],
-            "axes.labelcolor": self.colors["text"],
-            "xtick.color": self.colors["text"],
-            "ytick.color": self.colors["text"],
-            "text.color": self.colors["text"],
-            "grid.color": self.colors["grid"],
-        })
+        plt.rcParams.update(
+            {
+                "figure.facecolor": self.colors["bg"],
+                "axes.facecolor": self.colors["panel"],
+                "axes.edgecolor": self.colors["border"],
+                "axes.labelcolor": self.colors["text"],
+                "xtick.color": self.colors["text"],
+                "ytick.color": self.colors["text"],
+                "text.color": self.colors["text"],
+                "grid.color": self.colors["grid"],
+            }
+        )
         # 显式恢复中文字体列表
         plt.rcParams["font.sans-serif"] = cjk_fonts
 
@@ -156,67 +158,107 @@ class DASDashboard:
         """核心 UI 布局构建 (极致均衡比例)"""
         # (rcParams 已在 __init__ 中设置)
         self.fig = plt.figure(figsize=(15, 9))
-        self.fig.canvas.manager.set_window_title(self._t("title"))
-        
+        if self.fig.canvas.manager is not None:
+            self.fig.canvas.manager.set_window_title(self._t("title"))
+
         # 使用 GridSpec 划分区域
         # 高度：标题 0.4，两个图表各 1.3，底部文字 0.8 (更紧凑)
         # 宽度：左侧 2.4 (约 60%)，侧边栏 1.6 (约 40%)
-        gs = gridspec.GridSpec(4, 2, figure=self.fig, 
-                               height_ratios=[0.4, 1.3, 1.3, 0.8],
-                               width_ratios=[2.4, 1.6],
-                               hspace=0.45, wspace=0.25)
-        
+        gs = gridspec.GridSpec(
+            4,
+            2,
+            figure=self.fig,
+            height_ratios=[0.4, 1.3, 1.3, 0.8],
+            width_ratios=[2.4, 1.6],
+            hspace=0.45,
+            wspace=0.25,
+        )
+
         # --- 1. 顶部标题和 LED 状态栏 ---
         self.ax_header = self.fig.add_subplot(gs[0, :])
         self.ax_header.axis("off")
         self.header_text = self.ax_header.text(
-            0.5, 0.5, self._t("title"),
-            ha="center", va="center", fontsize=24, fontweight="bold", color=self.colors["accent_1"]
+            0.5,
+            0.5,
+            self._t("title"),
+            ha="center",
+            va="center",
+            fontsize=24,
+            fontweight="bold",
+            color=self.colors["accent_1"],
         )
-        
-        self.led = Circle((0.02, 0.5), 0.01, color=self.led_color("idle"), transform=self.ax_header.transAxes)
+
+        self.led = Circle(
+            (0.02, 0.5),
+            0.01,
+            color=self.led_color("idle"),
+            transform=self.ax_header.transAxes,
+        )
         self.ax_header.add_patch(self.led)
         self.status_label = self.ax_header.text(
-            0.04, 0.5, self._t("status") + ": " + self._t("idle"),
-            va="center", fontsize=11, fontweight="bold"
+            0.04,
+            0.5,
+            self._t("status") + ": " + self._t("idle"),
+            va="center",
+            fontsize=11,
+            fontweight="bold",
         )
 
         # --- 2. 瀑布图视图 ---
         self.ax_waterfall = self.fig.add_subplot(gs[1:4, 0])
-        setup_axis(self.ax_waterfall, 
-                   xlabel=self._t("time"), 
-                   ylabel=self._t("channel"), 
-                   title=self._t("waterfall"))
-        
+        setup_axis(
+            self.ax_waterfall,
+            xlabel=self._t("time"),
+            ylabel=self._t("channel"),
+            title=self._t("waterfall"),
+        )
+
         self.im = self.ax_waterfall.imshow(
             self.data_buffer.T,
             aspect="auto",
             origin="lower",
             cmap="magma",
-            extent=[-self.buffer_duration, 0, 0, self.n_channels],
-            animated=True
+            extent=(float(-self.buffer_duration), 0.0, 0.0, float(self.n_channels)),
+            animated=True,
         )
         # 极致压缩色标空间
-        add_colorbar(self.fig, self.im, self.ax_waterfall, label=self._t("amplitude"), fraction=0.015, pad=0.02)
+        add_colorbar(
+            self.fig,
+            self.im,
+            self.ax_waterfall,
+            label=self._t("amplitude"),
+            fraction=0.015,
+            pad=0.02,
+        )
 
         # --- 3. 趋势指标面板 ---
         self.ax_metrics = self.fig.add_subplot(gs[1, 1])
         setup_axis(self.ax_metrics, xlabel=self._t("time"), title=self._t("metrics"))
-        self.line_max, = self.ax_metrics.plot([], [], color=self.colors["accent_1"], lw=1.5, label="Max")
-        self.line_rms, = self.ax_metrics.plot([], [], color=self.colors["accent_2"], lw=1.5, label="RMS")
+        (self.line_max,) = self.ax_metrics.plot(
+            [], [], color=self.colors["accent_1"], lw=1.5, label="Max"
+        )
+        (self.line_rms,) = self.ax_metrics.plot(
+            [], [], color=self.colors["accent_2"], lw=1.5, label="RMS"
+        )
         self.ax_metrics.legend(loc="upper left", fontsize=7, frameon=False)
 
         # --- 4. 焦点通道细节图 ---
         self.ax_detail = self.fig.add_subplot(gs[2, 1])
         setup_axis(self.ax_detail, title=self._t("ch_detail", ch=self.focus_channel))
-        self.line_detail, = self.ax_detail.plot([], [], color=self.colors["accent_1"], lw=0.8)
+        (self.line_detail,) = self.ax_detail.plot(
+            [], [], color=self.colors["accent_1"], lw=0.8
+        )
 
         # --- 5. 事件日志与系统统计 ---
         self.ax_info = self.fig.add_subplot(gs[3, 1])
         self.ax_info.axis("off")
         self.info_text = self.ax_info.text(
-            0.0, 1.0, "System metadata initializing...",
-            va="top", fontsize=9, linespacing=1.6
+            0.0,
+            1.0,
+            "System metadata initializing...",
+            va="top",
+            fontsize=9,
+            linespacing=1.6,
         )
 
     def led_color(self, state: str) -> str:
@@ -224,18 +266,25 @@ class DASDashboard:
         return {
             "idle": self.colors["led_warn"],
             "active": self.colors["led_ok"],
-            "event": self.colors["led_error"]
+            "event": self.colors["led_error"],
         }.get(state, self.colors["border"])
 
-    def update(self, chunk: np.ndarray, events: Optional[np.ndarray] = None, metadata: Optional[Dict] = None):
+    def update(
+        self,
+        chunk: np.ndarray,
+        events: Optional[np.ndarray] = None,
+        metadata: Optional[Dict] = None,
+    ):
         """高性能实时刷新"""
         n_samples = chunk.shape[0]
-        
+
         # 数据平滑滚动
         if n_samples >= self.n_samples_buffer:
-            self.data_buffer = chunk[-self.n_samples_buffer:]
+            self.data_buffer = chunk[-self.n_samples_buffer :].astype(np.float64)
         else:
-            self.data_buffer = np.roll(self.data_buffer, -n_samples, axis=0)
+            self.data_buffer = np.roll(
+                self.data_buffer, -n_samples, axis=0
+            ).astype(np.float64)
             self.data_buffer[-n_samples:] = chunk
 
         # 1. 更新瀑布图
@@ -247,13 +296,14 @@ class DASDashboard:
         now = time.time() - self.start_timestamp
         max_v = np.max(np.abs(chunk))
         rms_v = np.sqrt(np.mean(chunk**2))
-        
+
         self.metrics_history["times"].append(now)
         self.metrics_history["max"].append(max_v)
         self.metrics_history["rms"].append(rms_v)
-        
+
         if len(self.metrics_history["times"]) > self.max_metrics_points:
-            for k in self.metrics_history: self.metrics_history[k].pop(0)
+            for k in self.metrics_history:
+                self.metrics_history[k].pop(0)
 
         t_axis = self.metrics_history["times"]
         self.line_max.set_data(t_axis, self.metrics_history["max"])
@@ -263,21 +313,24 @@ class DASDashboard:
 
         # 3. 更新焦点通道
         focus_data = chunk[:, self.focus_channel]
-        t_detail = np.linspace(0, n_samples/self.fs, n_samples)
+        t_detail = np.linspace(0, n_samples / self.fs, n_samples)
         self.line_detail.set_data(t_detail, focus_data)
         self.ax_detail.set_xlim(0, t_detail[-1])
-        self.ax_detail.set_ylim(np.min(focus_data)*1.2, np.max(focus_data)*1.2 + 0.01)
+        self.ax_detail.set_ylim(
+            np.min(focus_data) * 1.2, np.max(focus_data) * 1.2 + 0.01
+        )
 
         # 4. 更新状态与日志
         state = "active"
         n_events = 0
         if events is not None:
-            n_events = np.sum(events > 0)
+            n_events = int(np.sum(events > 0))
             if n_events > 0:
                 state = "event"
                 ts = time.strftime("%H:%M:%S")
                 self.event_log.append(f"[{ts}] Detected {n_events} anomalies")
-                if len(self.event_log) > 4: self.event_log.pop(0)
+                if len(self.event_log) > 4:
+                    self.event_log.pop(0)
 
         # 更新 LED 和文字
         self.led.set_color(self.led_color(state))
@@ -291,7 +344,7 @@ class DASDashboard:
             f"{self._t('rms'):<15}: {rms_v:.4f}",
             f"{self._t('events_count'):<15}: {len(self.event_log)}",
             "-" * 30,
-            "\n".join(self.event_log[::-1]) if self.event_log else self._t("no_events")
+            "\n".join(self.event_log[::-1]) if self.event_log else self._t("no_events"),
         ]
         self.info_text.set_text("\n".join(stats_lines))
 
