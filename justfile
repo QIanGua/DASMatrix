@@ -18,7 +18,7 @@ format:
 
 # Check types (mypy)
 typecheck:
-    uv run mypy DASMatrix
+    uv run ty check DASMatrix
 
 # Clean build artifacts
 clean:

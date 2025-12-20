@@ -172,7 +172,7 @@ class DASProcessor:
 
         # 限制频率范围
         if max_freq is None:
-            max_freq = frequencies[-1]
+            max_freq = float(frequencies[-1])
 
         mask = (frequencies >= min_freq) & (frequencies <= max_freq)
         valid_freqs = frequencies[mask]

@@ -10,7 +10,7 @@ NOTEBOOK_PATH = Path(__file__).parent.parent / "nb" / "DASMatrix_Tutorial.ipynb"
 def create_updated_notebook():
     """Create an updated tutorial notebook with the latest API examples."""
 
-    notebook = {
+    notebook: dict = {
         "cells": [],
         "metadata": {
             "kernelspec": {

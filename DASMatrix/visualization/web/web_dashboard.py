@@ -12,6 +12,9 @@ import numpy as np
 
 from .server import DashboardConfig, run_in_background
 
+# 声明全局变量以满足 type checker 要求
+config_state = None
+
 
 class DASWebDashboard:
     """DAS Web 实时监控看板

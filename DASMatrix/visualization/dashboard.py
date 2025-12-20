@@ -290,7 +290,7 @@ class DASDashboard:
         # 1. 更新瀑布图
         self.im.set_data(self.data_buffer.T)
         vmax = np.percentile(np.abs(self.data_buffer), 99.5) or 1.0
-        self.im.set_clim(-vmax, vmax)
+        self.im.set_clim(-float(vmax), float(vmax))
 
         # 2. 计算并更新指标
         now = time.time() - self.start_timestamp

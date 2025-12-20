@@ -146,7 +146,7 @@ def realtime_monitoring_demo(
                 aspect="auto",
                 origin="lower",
                 cmap="hot",
-                extent=[0, chunk_duration, 0, n_channels],
+                extent=(0, chunk_duration, 0, n_channels),
             )
             event_ax.set_title(
                 f"事件检测 - 块 {i + 1} @ {i * chunk_duration:.1f}s\n"
@@ -171,7 +171,7 @@ def realtime_monitoring_demo(
             aspect="auto",
             origin="lower",
             cmap="hot",
-            extent=[0, chunk_duration, 0, n_channels],
+            extent=(0, chunk_duration, 0, n_channels),
         )
         axes[0].set_title(
             f"实时包络图 - 块 {i + 1}/{n_chunks} (处理耗时: {proc_time:.1f} ms)"

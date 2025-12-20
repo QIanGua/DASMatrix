@@ -70,6 +70,7 @@ class TestComputationGraph:
         data = np.array([1, 2, 3])
         graph = ComputationGraph.leaf(data)
 
+        assert graph.root is not None
         op_node = OperationNode(operation="test", inputs=[graph.root])
         new_graph = graph.add_node(op_node)
 

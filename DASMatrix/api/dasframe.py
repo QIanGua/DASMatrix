@@ -321,6 +321,15 @@ class DASFrame:
         analytical = self.hilbert()
         return analytical.abs()
 
+    def spatial_smooth(self, kernel: int = 3) -> "DASFrame":
+        """空间平滑处理。
+
+        Args:
+            kernel: 滚动窗口大小（通道数）。
+        """
+        smoothed = self._data.rolling(distance=kernel, center=True).mean()
+        return DASFrame(smoothed, self._fs, self._dx, **self._metadata)
+
     def scale(self, factor: float = 1.0) -> "DASFrame":
         """Scale amplitude."""
         scaled = self._data * factor
@@ -382,7 +391,7 @@ class DASFrame:
         """阈值检测。"""
         data = self.collect()
         if threshold is None:
-            threshold = np.mean(data) + sigma * np.std(data)
+            threshold = float(np.mean(data) + sigma * np.std(data))
         return np.abs(data) > threshold
 
     # --- Visualization ---
@@ -524,13 +533,14 @@ class DASFrame:
             time_coords[0] - 0.5 / self._fs,
         )
         vmax = np.percentile(np.abs(data), 98)
+        vmax_val = float(vmax)
         im = ax.imshow(
             data,
             aspect="auto",
             cmap=cmap,
             extent=extent,
-            vmin=-vmax,
-            vmax=vmax,
+            vmin=-vmax_val,
+            vmax=vmax_val,
             **kwargs,
         )
 

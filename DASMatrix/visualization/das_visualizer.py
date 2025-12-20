@@ -365,7 +365,7 @@ class SpectrumPlot(PlotBase):
             ax.set_ylim(ymin - 0.05 * y_range, ymax + 0.05 * y_range)
 
         # 自动调整布局
-        fig.tight_layout()
+        fig.tight_layout()  # type: ignore
 
         return fig
 
@@ -555,7 +555,7 @@ class WaveformPlot(PlotBase):
         plt.minorticks_off()
 
         # 自动调整布局
-        fig.tight_layout()
+        fig.tight_layout()  # type: ignore
 
         return fig
 
@@ -652,8 +652,8 @@ class SpectrogramPlot(PlotBase):
             Sxx_db,
             shading="auto",  # 使用auto而不是gouraud，更高效
             cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
+            vmin=float(vmin),
+            vmax=float(vmax),
             rasterized=True,  # 光栅化以提高性能
         )
 
@@ -710,7 +710,7 @@ class SpectrogramPlot(PlotBase):
         ax.grid(False)
 
         # 自动调整布局
-        fig.tight_layout()
+        fig.tight_layout()  # type: ignore
 
         return fig
 
@@ -782,8 +782,8 @@ class WaterfallPlot(PlotBase):
             aspect=aspect,  # type: ignore
             origin=origin,  # type: ignore
             interpolation="none",  # 禁用插值以保持原始数据的清晰度
-            vmin=vmin,
-            vmax=vmax,
+            vmin=float(vmin),
+            vmax=float(vmax),
         )
 
         # 添加颜色条
@@ -858,7 +858,7 @@ class WaterfallPlot(PlotBase):
         ax.grid(False)  # 对于imshow类型的图，通常不需要网格
 
         # 自动调整布局
-        fig.tight_layout()
+        fig.tight_layout()  # type: ignore
 
         # 添加可选水印
         self._add_watermark(fig, ax)
@@ -1409,7 +1409,7 @@ class FKPlot(PlotBase):
                             fontsize=8,
                         )
 
-        fig.tight_layout()
+        fig.tight_layout()  # type: ignore
         return fig
 
 

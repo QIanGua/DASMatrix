@@ -1,0 +1,334 @@
+error[invalid-assignment]: Object of type `floating[Any] | float64` is not assignable to `int | float | None`
+   --> DASMatrix/api/dasframe.py:385:13
+    |
+383 |         data = self.collect()
+384 |         if threshold is None:
+385 |             threshold = np.mean(data) + sigma * np.std(data)
+    |             ---------   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incompatible value of type `floating[Any] | float64`
+    |             |
+    |             Declared type `int | float | None`
+386 |         return np.abs(data) > threshold
+    |
+info: rule `invalid-assignment` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `imshow` is incorrect
+   --> DASMatrix/api/dasframe.py:532:13
+    |
+530 |             cmap=cmap,
+531 |             extent=extent,
+532 |             vmin=-vmax,
+    |             ^^^^^^^^^^ Expected `int | float | None`, found `floating[Any]`
+533 |             vmax=vmax,
+534 |             **kwargs,
+    |
+info: Method defined here
+   --> .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:479:9
+    |
+477 |         **kwargs
+478 |     ) -> FillBetweenPolyCollection: ...
+479 |     def imshow(
+    |         ^^^^^^
+480 |         self,
+481 |         X: ArrayLike | PIL.Image.Image,
+    |
+   ::: .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:488:9
+    |
+486 |         interpolation: str | None = ...,
+487 |         alpha: float | ArrayLike | None = ...,
+488 |         vmin: float | None = ...,
+    |         ------------------------ Parameter declared here
+489 |         vmax: float | None = ...,
+490 |         colorizer: Colorizer | None = ...,
+    |
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `imshow` is incorrect
+   --> DASMatrix/api/dasframe.py:533:13
+    |
+531 |             extent=extent,
+532 |             vmin=-vmax,
+533 |             vmax=vmax,
+    |             ^^^^^^^^^ Expected `int | float | None`, found `floating[Any]`
+534 |             **kwargs,
+535 |         )
+    |
+info: Method defined here
+   --> .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:479:9
+    |
+477 |         **kwargs
+478 |     ) -> FillBetweenPolyCollection: ...
+479 |     def imshow(
+    |         ^^^^^^
+480 |         self,
+481 |         X: ArrayLike | PIL.Image.Image,
+    |
+   ::: .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:489:9
+    |
+487 |         alpha: float | ArrayLike | None = ...,
+488 |         vmin: float | None = ...,
+489 |         vmax: float | None = ...,
+    |         ------------------------ Parameter declared here
+490 |         colorizer: Colorizer | None = ...,
+491 |         origin: Literal["upper", "lower"] | None = ...,
+    |
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-assignment]: Object of type `ndarray[Unknown, Unknown]` is not assignable to `int | float | None`
+   --> DASMatrix/processing/das_processor.py:175:13
+    |
+173 |         # 限制频率范围
+174 |         if max_freq is None:
+175 |             max_freq = frequencies[-1]
+    |             --------   ^^^^^^^^^^^^^^^ Incompatible value of type `ndarray[Unknown, Unknown]`
+    |             |
+    |             Declared type `int | float | None`
+176 |
+177 |         mask = (frequencies >= min_freq) & (frequencies <= max_freq)
+    |
+info: rule `invalid-assignment` is enabled by default
+
+warning[possibly-missing-attribute]: Attribute `tight_layout` may be missing on object of type `Figure | SubFigure`
+   --> DASMatrix/visualization/das_visualizer.py:368:9
+    |
+367 |         # 自动调整布局
+368 |         fig.tight_layout()
+    |         ^^^^^^^^^^^^^^^^
+369 |
+370 |         return fig
+    |
+info: rule `possibly-missing-attribute` is enabled by default
+
+warning[possibly-missing-attribute]: Attribute `tight_layout` may be missing on object of type `Figure | SubFigure`
+   --> DASMatrix/visualization/das_visualizer.py:558:9
+    |
+557 |         # 自动调整布局
+558 |         fig.tight_layout()
+    |         ^^^^^^^^^^^^^^^^
+559 |
+560 |         return fig
+    |
+info: rule `possibly-missing-attribute` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `pcolormesh` is incorrect
+   --> DASMatrix/visualization/das_visualizer.py:655:13
+    |
+653 |             shading="auto",  # 使用auto而不是gouraud，更高效
+654 |             cmap=cmap,
+655 |             vmin=vmin,
+    |             ^^^^^^^^^ Expected `int | float | None`, found `floating[Any]`
+656 |             vmax=vmax,
+657 |             rasterized=True,  # 光栅化以提高性能
+    |
+info: Method defined here
+   --> .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:514:9
+    |
+512 |         **kwargs
+513 |     ) -> Collection: ...
+514 |     def pcolormesh(
+    |         ^^^^^^^^^^
+515 |         self,
+516 |         *args: ArrayLike,
+    |
+   ::: .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:520:9
+    |
+518 |         norm: str | Normalize | None = ...,
+519 |         cmap: str | Colormap | None = ...,
+520 |         vmin: float | None = ...,
+    |         ------------------------ Parameter declared here
+521 |         vmax: float | None = ...,
+522 |         colorizer: Colorizer | None = ...,
+    |
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `pcolormesh` is incorrect
+   --> DASMatrix/visualization/das_visualizer.py:656:13
+    |
+654 |             cmap=cmap,
+655 |             vmin=vmin,
+656 |             vmax=vmax,
+    |             ^^^^^^^^^ Expected `int | float | None`, found `floating[Any]`
+657 |             rasterized=True,  # 光栅化以提高性能
+658 |         )
+    |
+info: Method defined here
+   --> .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:514:9
+    |
+512 |         **kwargs
+513 |     ) -> Collection: ...
+514 |     def pcolormesh(
+    |         ^^^^^^^^^^
+515 |         self,
+516 |         *args: ArrayLike,
+    |
+   ::: .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:521:9
+    |
+519 |         cmap: str | Colormap | None = ...,
+520 |         vmin: float | None = ...,
+521 |         vmax: float | None = ...,
+    |         ------------------------ Parameter declared here
+522 |         colorizer: Colorizer | None = ...,
+523 |         shading: Literal["flat", "nearest", "gouraud", "auto"] | None = ...,
+    |
+info: rule `invalid-argument-type` is enabled by default
+
+warning[possibly-missing-attribute]: Attribute `tight_layout` may be missing on object of type `Figure | SubFigure`
+   --> DASMatrix/visualization/das_visualizer.py:713:9
+    |
+712 |         # 自动调整布局
+713 |         fig.tight_layout()
+    |         ^^^^^^^^^^^^^^^^
+714 |
+715 |         return fig
+    |
+info: rule `possibly-missing-attribute` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `imshow` is incorrect
+   --> DASMatrix/visualization/das_visualizer.py:785:13
+    |
+783 |             origin=origin,  # type: ignore
+784 |             interpolation="none",  # 禁用插值以保持原始数据的清晰度
+785 |             vmin=vmin,
+    |             ^^^^^^^^^ Expected `int | float | None`, found `floating[Any] | Unknown | int | float`
+786 |             vmax=vmax,
+787 |         )
+    |
+info: Element `floating[Any]` of this union is not assignable to `int | float | None`
+info: Method defined here
+   --> .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:479:9
+    |
+477 |         **kwargs
+478 |     ) -> FillBetweenPolyCollection: ...
+479 |     def imshow(
+    |         ^^^^^^
+480 |         self,
+481 |         X: ArrayLike | PIL.Image.Image,
+    |
+   ::: .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:488:9
+    |
+486 |         interpolation: str | None = ...,
+487 |         alpha: float | ArrayLike | None = ...,
+488 |         vmin: float | None = ...,
+    |         ------------------------ Parameter declared here
+489 |         vmax: float | None = ...,
+490 |         colorizer: Colorizer | None = ...,
+    |
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `imshow` is incorrect
+   --> DASMatrix/visualization/das_visualizer.py:786:13
+    |
+784 |             interpolation="none",  # 禁用插值以保持原始数据的清晰度
+785 |             vmin=vmin,
+786 |             vmax=vmax,
+    |             ^^^^^^^^^ Expected `int | float | None`, found `floating[Any] | Unknown | int | float`
+787 |         )
+    |
+info: Element `floating[Any]` of this union is not assignable to `int | float | None`
+info: Method defined here
+   --> .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:479:9
+    |
+477 |         **kwargs
+478 |     ) -> FillBetweenPolyCollection: ...
+479 |     def imshow(
+    |         ^^^^^^
+480 |         self,
+481 |         X: ArrayLike | PIL.Image.Image,
+    |
+   ::: .venv/lib/python3.12/site-packages/matplotlib/axes/_axes.pyi:489:9
+    |
+487 |         alpha: float | ArrayLike | None = ...,
+488 |         vmin: float | None = ...,
+489 |         vmax: float | None = ...,
+    |         ------------------------ Parameter declared here
+490 |         colorizer: Colorizer | None = ...,
+491 |         origin: Literal["upper", "lower"] | None = ...,
+    |
+info: rule `invalid-argument-type` is enabled by default
+
+warning[possibly-missing-attribute]: Attribute `tight_layout` may be missing on object of type `Figure | SubFigure`
+   --> DASMatrix/visualization/das_visualizer.py:861:9
+    |
+860 |         # 自动调整布局
+861 |         fig.tight_layout()
+    |         ^^^^^^^^^^^^^^^^
+862 |
+863 |         # 添加可选水印
+    |
+info: rule `possibly-missing-attribute` is enabled by default
+
+warning[possibly-missing-attribute]: Attribute `tight_layout` may be missing on object of type `Figure | SubFigure`
+    --> DASMatrix/visualization/das_visualizer.py:1412:9
+     |
+1410 |                         )
+1411 |
+1412 |         fig.tight_layout()
+     |         ^^^^^^^^^^^^^^^^
+1413 |         return fig
+     |
+info: rule `possibly-missing-attribute` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `set_clim` is incorrect
+   --> DASMatrix/visualization/dashboard.py:293:26
+    |
+291 |         self.im.set_data(self.data_buffer.T)
+292 |         vmax = np.percentile(np.abs(self.data_buffer), 99.5) or 1.0
+293 |         self.im.set_clim(-vmax, vmax)
+    |                          ^^^^^ Expected `int | float | tuple[int | float, int | float] | None`, found `floating[Any] | int | float`
+294 |
+295 |         # 2. 计算并更新指标
+    |
+info: Element `floating[Any]` of this union is not assignable to `int | float | tuple[int | float, int | float] | None`
+info: Method defined here
+  --> .venv/lib/python3.12/site-packages/matplotlib/colorizer.pyi:62:9
+   |
+60 |     ) -> np.ndarray: ...
+61 |     def get_clim(self) -> tuple[float, float]: ...
+62 |     def set_clim(self, vmin: float | tuple[float, float] | None = ..., vmax: float | None = ...) -> None: ...
+   |         ^^^^^^^^       ---------------------------------------------- Parameter declared here
+63 |     def get_alpha(self) -> float | None: ...
+64 |     def get_cmap(self) -> colors.Colormap: ...
+   |
+info: Union variant `bound method AxesImage.set_clim(vmin: int | float | tuple[int | float, int | float] | None = ..., vmax: int | float | None = ...) -> None` is incompatible with this call site
+info: Attempted to call union type `Unknown | (bound method AxesImage.set_clim(vmin: int | float | tuple[int | float, int | float] | None = ..., vmax: int | float | None = ...) -> None)`
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `set_clim` is incorrect
+   --> DASMatrix/visualization/dashboard.py:293:33
+    |
+291 |         self.im.set_data(self.data_buffer.T)
+292 |         vmax = np.percentile(np.abs(self.data_buffer), 99.5) or 1.0
+293 |         self.im.set_clim(-vmax, vmax)
+    |                                 ^^^^ Expected `int | float | None`, found `(floating[Any] & ~AlwaysFalsy) | float`
+294 |
+295 |         # 2. 计算并更新指标
+    |
+info: Element `floating[Any] & ~AlwaysFalsy` of this union is not assignable to `int | float | None`
+info: Method defined here
+  --> .venv/lib/python3.12/site-packages/matplotlib/colorizer.pyi:62:9
+   |
+60 |     ) -> np.ndarray: ...
+61 |     def get_clim(self) -> tuple[float, float]: ...
+62 |     def set_clim(self, vmin: float | tuple[float, float] | None = ..., vmax: float | None = ...) -> None: ...
+   |         ^^^^^^^^                                                       ------------------------ Parameter declared here
+63 |     def get_alpha(self) -> float | None: ...
+64 |     def get_cmap(self) -> colors.Colormap: ...
+   |
+info: Union variant `bound method AxesImage.set_clim(vmin: int | float | tuple[int | float, int | float] | None = ..., vmax: int | float | None = ...) -> None` is incompatible with this call site
+info: Attempted to call union type `Unknown | (bound method AxesImage.set_clim(vmin: int | float | tuple[int | float, int | float] | None = ..., vmax: int | float | None = ...) -> None)`
+info: rule `invalid-argument-type` is enabled by default
+
+warning[unresolved-global]: Invalid global declaration of `config_state`
+  --> DASMatrix/visualization/web/web_dashboard.py:32:16
+   |
+30 |         focus_channel: int = 0,
+31 |     ):
+32 |         global config_state
+   |                ^^^^^^^^^^^^ `config_state` has no declarations or bindings in the global scope
+33 |         self.n_channels = n_channels
+34 |         self.fs = fs
+   |
+info: This limits ty's ability to make accurate inferences about the boundness and types of global-scope symbols
+info: Consider adding a declaration to the global scope, e.g. `config_state: int`
+info: rule `unresolved-global` is enabled by default
+
+Found 16 diagnostics

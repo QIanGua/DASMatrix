@@ -64,7 +64,7 @@ def main():
     print("执行处理流程: 带通滤波 -> 希尔伯特包络 -> 空间平滑...")
     processed = (
         D.bandpass(low=20, high=100)  # 带通滤波
-        .hilbert_env()  # 希尔伯特包络
+        .envelope()  # 希尔伯特包络
         .spatial_smooth(kernel=3)
     )  # 空间平滑
 
@@ -75,11 +75,11 @@ def main():
 
     # 事件检测
     print("执行事件检测...")
-    events = processed.threshold_detect(db=-20)
+    events = processed.threshold_detect(sigma=3.0)
 
     # 获取结果数据
     print("获取结果数据...")
-    result_data = events.collect()
+    result_data = events
 
     print(f"结果形状: {result_data.shape}")
     print(f"检测到的事件数量: {np.sum(result_data)}")
