@@ -567,6 +567,8 @@ class DASFrame:
     def plot_profile(
         self,
         stat: str = "rms",
+        channels: Optional[builtins.slice] = None,
+        x_axis: str = "channel",
         title: Optional[str] = None,
         ylabel: Optional[str] = None,
         ax: Optional[plt.Axes] = None,
@@ -576,29 +578,34 @@ class DASFrame:
 
         Args:
             stat: 统计指标类型, 'rms', 'mean', 'std', 'max', 'min'
+            channels: 通道切片，例如 slice(400, 600)
+            x_axis: X 轴数据，'channel' (点位) 或 'distance' (物理距离)
             title: 图标题
             ylabel: Y轴标签
-            ax: 可选的 matplotlib Axes 对象
+            ax: 可选标的 matplotlib Axes 对象
             **kwargs: 传递给 ProfilePlot.plot 的其他参数
         """
+        # 如果指定了通道范围，先进行切片
+        frame = self if channels is None else self.slice(x=channels)
+
         if stat == "rms":
-            values = self.rms()
+            values = frame.rms()
             default_title = "RMS Profile"
             default_ylabel = "RMS Amplitude"
         elif stat == "mean":
-            values = self.mean(axis=0).flatten()
+            values = frame.mean(axis=0).flatten()
             default_title = "Mean Profile"
             default_ylabel = "Mean Amplitude"
         elif stat == "std":
-            values = self.std(axis=0).flatten()
+            values = frame.std(axis=0).flatten()
             default_title = "Standard Deviation Profile"
             default_ylabel = "Std Amplitude"
         elif stat == "max":
-            values = self.max(axis=0).flatten()
+            values = frame.max(axis=0).flatten()
             default_title = "Max Profile"
             default_ylabel = "Max Amplitude"
         elif stat == "min":
-            values = self.min(axis=0).flatten()
+            values = frame.min(axis=0).flatten()
             default_title = "Min Profile"
             default_ylabel = "Min Amplitude"
         else:
@@ -607,7 +614,15 @@ class DASFrame:
         from ..visualization.das_visualizer import ProfilePlot
 
         plotter = ProfilePlot()
-        distances = self._data.distance.values
+
+        if x_axis == "channel":
+            distances = np.arange(len(values))
+            if "xlabel" not in kwargs:
+                kwargs["xlabel"] = "Channel"
+        else:
+            distances = frame._data.distance.values
+            if "xlabel" not in kwargs:
+                kwargs["xlabel"] = "Distance (m)"
 
         return plotter.plot(
             values=values,
@@ -618,14 +633,31 @@ class DASFrame:
             **kwargs,
         )
 
-    def plot_rms(self, **kwargs: Any) -> plt.Figure:
+    def plot_rms(
+        self,
+        channels: Optional[builtins.slice] = None,
+        x_axis: str = "channel",
+        **kwargs: Any,
+    ) -> plt.Figure:
         """绘制 RMS 剖面图。"""
-        return self.plot_profile(stat="rms", **kwargs)
+        return self.plot_profile(stat="rms", channels=channels, x_axis=x_axis, **kwargs)
 
-    def plot_mean(self, **kwargs: Any) -> plt.Figure:
+    def plot_mean(
+        self,
+        channels: Optional[builtins.slice] = None,
+        x_axis: str = "channel",
+        **kwargs: Any,
+    ) -> plt.Figure:
         """绘制均值剖面图。"""
-        return self.plot_profile(stat="mean", **kwargs)
+        return self.plot_profile(
+            stat="mean", channels=channels, x_axis=x_axis, **kwargs
+        )
 
-    def plot_std(self, **kwargs: Any) -> plt.Figure:
+    def plot_std(
+        self,
+        channels: Optional[builtins.slice] = None,
+        x_axis: str = "channel",
+        **kwargs: Any,
+    ) -> plt.Figure:
         """绘制标准差剖面图。"""
-        return self.plot_profile(stat="std", **kwargs)
+        return self.plot_profile(stat="std", channels=channels, x_axis=x_axis, **kwargs)

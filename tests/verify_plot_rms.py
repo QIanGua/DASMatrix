@@ -27,7 +27,14 @@ def verify_integrated_plots():
     fig_rms = frame.plot_rms(title="Integrated RMS Verification")
     assert isinstance(fig_rms, plt.Figure)
     assert fig_rms.axes[0].get_title() == "Integrated RMS Verification"
+    assert fig_rms.axes[0].get_xlabel() == "Channel"
     plt.close(fig_rms)
+
+    # 测试 plot_rms(x_axis="distance")
+    print("Testing plot_rms(x_axis='distance')...")
+    fig_dist = frame.plot_rms(x_axis="distance")
+    assert fig_dist.axes[0].get_xlabel() == "Distance (m)"
+    plt.close(fig_dist)
 
     # 4. 测试 plot_mean
     print("Testing plot_mean()...")
@@ -41,7 +48,15 @@ def verify_integrated_plots():
     assert isinstance(fig_std, plt.Figure)
     plt.close(fig_std)
 
-    # 6. 测试链式调用
+    # 6. 测试通道切片
+    print("Testing plot_rms(channels=slice(20, 40))...")
+    fig_sliced = frame.plot_rms(channels=slice(20, 40))
+    assert isinstance(fig_sliced, plt.Figure)
+    # 验证数据点数量是否匹配切片长度 (20)
+    assert len(fig_sliced.axes[0].get_lines()[0].get_xdata()) == 20
+    plt.close(fig_sliced)
+
+    # 7. 测试链式调用
     print("Testing chained call: frame.detrend().plot_rms()...")
     fig_chained = frame.detrend().plot_rms()
     assert isinstance(fig_chained, plt.Figure)

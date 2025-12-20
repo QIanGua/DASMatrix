@@ -1261,7 +1261,7 @@ class DASVisualizer:
         values: np.ndarray,
         distances: Optional[np.ndarray] = None,
         title: Optional[str] = None,
-        xlabel: str = "Distance (m)",
+        xlabel: str = "Channel",
         ylabel: str = "Amplitude",
         file_name: Optional[str] = None,
         ax: Optional[plt.Axes] = None,
@@ -1419,7 +1419,7 @@ class ProfilePlot(PlotBase):
         values: np.ndarray,
         distances: Optional[np.ndarray] = None,
         title: Optional[str] = None,
-        xlabel: str = "Distance (m)",
+        xlabel: str = "Channel",
         ylabel: str = "Amplitude",
         label: Optional[str] = None,
         color: Optional[str] = None,
@@ -1450,7 +1450,7 @@ class ProfilePlot(PlotBase):
 
         if distances is None:
             distances = np.arange(len(values))
-            if xlabel == "Distance (m)":
+            if xlabel == "Channel":
                 xlabel = "Channel Index"
 
         # 使用点线图展示，这是 DAS 剖面图的标准做法
