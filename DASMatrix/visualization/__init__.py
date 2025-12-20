@@ -11,6 +11,8 @@ from .das_visualizer import (
     WaterfallPlot,
     WaveformPlot,
 )
+from .dashboard import DASDashboard
+from .web.web_dashboard import DASWebDashboard
 from .styles import (
     add_colorbar,
     add_panel_label,
@@ -32,6 +34,8 @@ __all__ = [
     "SpectrogramPlot",
     "WaveformPlot",
     "WaterfallPlot",
+    "DASDashboard",
+    "DASWebDashboard",
     # 样式工具
     "apply_nature_style",
     "create_figure",

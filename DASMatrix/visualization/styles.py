@@ -226,11 +226,13 @@ def add_colorbar(
     if config is None:
         config = VisualizationConfig()
 
+    # 安全地设置默认值，允许 kwargs 覆盖
+    kwargs.setdefault("pad", config.colorbar_pad)
+    kwargs.setdefault("fraction", config.colorbar_width * 2)
+
     cbar = fig.colorbar(
         mappable,
         ax=ax,
-        pad=config.colorbar_pad,
-        fraction=config.colorbar_width * 2,
         **kwargs,
     )
 

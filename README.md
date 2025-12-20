@@ -1,7 +1,7 @@
 # DASMatrix
 
 <div align="center">
-  <img src="./docs/assets/logo.png" alt="DASMatrix Logo" width="200"/>
+  <img src="./DASMatrix-Logo.jpg" alt="DASMatrix Logo" width="200"/>
   <h3>分布式声学传感数据处理与分析框架</h3>
 </div>
 

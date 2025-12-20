@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DASMatrix Premium Web Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #030303;
+            color: #f0f0f0;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        .glass {
+            background: rgba(15, 15, 15, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .neon-border {
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+        }
+        .neon-text {
+            text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        .axis-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+        }
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to bottom, transparent, rgba(0, 229, 255, 0.2), transparent);
+            position: absolute;
+            animation: scanline 4s linear infinite;
+            z-index: 10;
+            pointer-events: none;
+        }
+        /* CSS Logo Styles */
+        .logo-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px;
+            transform: rotate(45deg);
+        }
+        .logo-dot {
+            width: 4px;
+            height: 4px;
+            background-color: #00E5FF;
+            box-shadow: 0 0 5px #00E5FF;
+            animation: logo-pulse 2s infinite ease-in-out;
+        }
+        .logo-dot:nth-child(1) { animation-delay: 0.0s; }
+        .logo-dot:nth-child(2) { animation-delay: 0.1s; }
+        .logo-dot:nth-child(3) { animation-delay: 0.2s; }
+        .logo-dot:nth-child(4) { animation-delay: 0.1s; }
+        .logo-dot:nth-child(5) { animation-delay: 0.2s; }
+        .logo-dot:nth-child(6) { animation-delay: 0.3s; }
+        .logo-dot:nth-child(7) { animation-delay: 0.2s; }
+        .logo-dot:nth-child(8) { animation-delay: 0.3s; }
+        .logo-dot:nth-child(9) { animation-delay: 0.4s; }
+        @keyframes logo-pulse {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            const [status, setStatus] = useState('idle');
+            const [lang, setLang] = useState('cn');
+            const [metrics, setMetrics] = useState({ max: 0, rms: 0 });
+            const [logs, setLogs] = useState([]);
+            const [config, setConfig] = useState(null);
+            const [error, setError] = useState(null);
+            const [focusChannel, setFocusChannel] = useState(0);
+            
+            const canvasRef = useRef(null);
+            const metricsChartRef = useRef(null);
+            const detailChartRef = useRef(null);
+            const wsRef = useRef(null);
+            const historyRef = useRef({ max: [], rms: [], times: [] });
+
+            // --- State & Helpers (Moved to Top) ---
+            const [currentTime, setCurrentTime] = useState(Date.now() / 1000);
+            const [tooltip, setTooltip] = useState(null);
+
+            const formatTime = (ts) => {
+                if (!ts) return "--:--:--";
+                const date = new Date(ts * 1000);
+                return date.toLocaleTimeString([], { hour12: false });
+            };
+
+            const handleCanvasMouseMove = (e) => {
+                const canvas = canvasRef.current;
+                if (!canvas || !config) return;
+                
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // Put it at y=numRows
+                const ch = Math.floor((x / rect.width) * config.n_channels);
+                
+                // Time from Top (Newest) to Bottom (Oldest)
+                // y=0 -> currentTime; y=height -> currentTime - buffer
+                const timeAtCursor = currentTime - config.buffer_duration * (y / rect.height);
+                
+                setTooltip({
+                    x: e.clientX,
+                    y: e.clientY,
+                    ch: Math.max(0, Math.min(ch, config.n_channels - 1)),
+                    time: formatTime(timeAtCursor)
+                });
+            };
+
+            const handleCanvasMouseLeave = () => {
+               setTooltip(null);
+            };
+
+            const t = (key) => {
+                const bufDur = config?.buffer_duration || 20;
+                const dict = {
+                    cn: {
+                        title: 'DASMatrix 监测中心',
+                        waterfall: `时空瀑布图 (滚动窗口 ${bufDur}s)`,
+                        metrics: '指标实时监控',
+                        detail: '单通道波形分析',
+                        status: '状态',
+                        idle: '就绪', active: '推流中', event: '异常',
+                        log: '日志', loading: '正在启动...',
+                        no_data: '等待数据...',
+                        retry: '重连',
+                        ch_sel: '通道'
+                    },
+                    en: {
+                        title: 'DASMatrix Monitoring',
+                        waterfall: `Spatio-Temporal Waterfall (${bufDur}s)`,
+                        metrics: 'Metric Stream',
+                        detail: 'Channel Analysis',
+                        status: 'SYS',
+                        idle: 'READY', active: 'STREAMING', event: 'ALERT',
+                        log: 'Logs', loading: 'Starting...',
+                        no_data: 'Link Standby...',
+                        retry: 'Reconnect',
+                        ch_sel: 'Channel'
+                    }
+                };
+                return dict[lang][key] || key;
+            };
+
+            const fetchConfig = () => {
+                fetch('/api/config')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data) {
+                            setConfig(data);
+                            setLang(data.lang || 'cn');
+                            setFocusChannel(data.focus_channel || 0);
+                        } else {
+                            setTimeout(fetchConfig, 500);
+                        }
+                    })
+                    .catch(() => setError("Backend Offline"));
+            };
+
+            useEffect(() => { fetchConfig(); }, []);
+
+            useEffect(() => {
+                if (!config) return;
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+                wsRef.current = socket;
+
+                socket.onopen = () => { setStatus('active'); setError(null); };
+                socket.onmessage = (e) => {
+                    const msg = JSON.parse(e.data);
+                    if (msg.type === 'update') updateDashboard(msg);
+                };
+                socket.onclose = () => { setStatus('idle'); setTimeout(() => setConfig({...config}), 2000); };
+                socket.onerror = () => { setStatus('idle'); setError("WS Failed"); };
+
+                return () => socket.close();
+            }, [config]);
+
+            const handleChannelChange = (val) => {
+                let ch = parseInt(val) || 0;
+                if (config) ch = Math.max(0, Math.min(ch, config.n_channels - 1));
+                setFocusChannel(ch);
+                if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: 'set_focus_channel', value: ch }));
+                }
+            };
+
+            const updateWaterfall = (rows) => {
+                const canvas = canvasRef.current;
+                if (!canvas || !rows || rows.length === 0) return;
+                const ctx = canvas.getContext('2d');
+                const { width, height } = canvas;
+                
+                // rows 是二维数组 [0=Oldest .. N=Newest]
+                const numRows = rows.length;
+                
+                // 1. 向下移动现有内容 (Move contents DOWN)
+                // 取 (0,0) 到 (w, h-numRows) 的内容
+                const imgData = ctx.getImageData(0, 0, width, height - numRows);
+                // 放到 (0, numRows)
+                ctx.putImageData(imgData, 0, numRows);
+                
+                // 2. 绘制新数据 (Draw NEWEST at TOP)
+                for (let rowIdx = 0; rowIdx < numRows; rowIdx++) {
+                    const row = rows[rowIdx];
+                    const n = row.length;
+                    const dx = width / n;
+                    
+                    // rowIdx=N-1 (Newest) -> y=0 (Top)
+                    // rowIdx=0 (Oldest in chunk) -> y=numRows-1 (Lower)
+                    const y = numRows - 1 - rowIdx; 
+                    
+                    // 使用更专业的 Colormap (Turbo-like)
+                    for (let i = 0; i < n; i++) {
+                        const v = Math.min(1.0, Math.abs(row[i]) / 1.0);
+                        // Turbo Color Mapping Approximation
+                        const r = Math.floor(255 * Math.sin(v * Math.PI - 0.5) * 0.5 + 127);
+                        const g = Math.floor(255 * Math.sin(v * Math.PI) * 0.5 + 127);
+                        const b = Math.floor(255 * Math.cos(v * Math.PI - 0.5) * 0.5 + 127);
+                        
+                        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+                        ctx.fillRect(Math.floor(i * dx), y, Math.ceil(dx), 1);
+                    }
+                }
+            };
+
+                // State moved to top
+
+                const updateDashboard = (msg) => {
+                    setStatus(msg.events_count > 0 ? 'event' : 'active');
+                    if (msg.events_count > 0) {
+                        const timeStr = new Date().toLocaleTimeString();
+                        setLogs(prev => [{ time: timeStr, msg: `异常报警: ${msg.events_count} 个通道触发阈值` }, ...prev].slice(0, 15));
+                    }
+                    setMetrics(msg.metrics);
+                    // 更新当前时间
+                    if (msg.timestamp) setCurrentTime(msg.timestamp);
+
+                    updateWaterfall(msg.waterfall);
+                    if (metricsChartRef.current) {
+                        const now = new Date().toLocaleTimeString().split(' ')[0];
+                        historyRef.current.max.push(msg.metrics.max);
+                        historyRef.current.rms.push(msg.metrics.rms);
+                        historyRef.current.times.push(now);
+                        if (historyRef.current.max.length > 50) {
+                            historyRef.current.max.shift(); historyRef.current.rms.shift(); historyRef.current.times.shift();
+                        }
+                        metricsChartRef.current.setOption({
+                            xAxis: { data: historyRef.current.times },
+                            series: [{ data: historyRef.current.max }, { data: historyRef.current.rms }]
+                        });
+                    }
+                    if (detailChartRef.current) {
+                        detailChartRef.current.setOption({ series: [{ data: msg.focus_detail }] });
+                    }
+                };
+
+            useEffect(() => {
+                const visualOpt = {
+                    backgroundColor: 'transparent',
+                    tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.8)', borderColor: '#00E5FF', textStyle: { color: '#fff' } },
+                    grid: { top: 15, bottom: 25, left: 50, right: 10 },
+                    xAxis: { type: 'category', data: [], axisTick: { show: false }, axisLine: { lineStyle: { color: '#333' } } },
+                    yAxis: { 
+                        type: 'value', 
+                        splitNumber: 4,
+                        axisLabel: { fontSize: 9, margin: 8 },
+                        splitLine: { lineStyle: { color: '#1a1a1a' } }, 
+                        axisLine: { lineStyle: { color: '#333' } } 
+                    }
+                };
+                const mChart = echarts.init(document.getElementById('metrics-chart'), 'dark');
+                mChart.setOption({ ...visualOpt, series: [{ name: 'Max', type: 'line', smooth: true, color: '#00E5FF', areaStyle: { color: 'rgba(0, 229, 255, 0.05)' } }, { name: 'RMS', type: 'line', smooth: true, color: '#FFD600', areaStyle: { color: 'rgba(255, 214, 0, 0.05)' } }] });
+                metricsChartRef.current = mChart;
+                const dChart = echarts.init(document.getElementById('detail-chart'), 'dark');
+                dChart.setOption({ ...visualOpt, grid: { top: 10, bottom: 30, left: 45, right: 10 }, series: [{ type: 'line', smooth: true, color: '#00E5FF', symbol: 'none', areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(0, 229, 255, 0.3)' }, { offset: 1, color: 'transparent' }]) }, data: [] }] });
+                detailChartRef.current = dChart;
+                const handleResize = () => { mChart.resize(); dChart.resize(); };
+                window.addEventListener('resize', handleResize);
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
+
+            return (
+                <div className="h-screen w-screen flex flex-col p-4 space-y-4 relative">
+                    {/* Global Tooltip Layer (Outside Overflow Containers) */}
+                    {tooltip && (
+                        <div style={{ 
+                            top: tooltip.y - 40, 
+                            left: (tooltip.x + 150 > window.innerWidth) ? tooltip.x - 140 : tooltip.x + 20 
+                        }} className="fixed z-[9999] bg-black/80 backdrop-blur border border-cyan-500/50 p-2 rounded-lg shadow-[0_0_15px_rgba(0,229,255,0.3)] pointer-events-none flex flex-col">
+                            <div className="flex items-center space-x-2">
+                                <span className="text-[10px] text-cyan-400 font-bold uppercase">CH {tooltip.ch}</span>
+                                <span className="text-[10px] text-zinc-500">|</span>
+                                <span className="text-[10px] text-white font-mono">{tooltip.time}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <header className="flex items-center glass p-5 rounded-3xl neon-border border-white/10 relative">
+                        {/* 左侧状态指示器 */}
+                        <div className="flex items-center space-x-3">
+                            <div className={`h-3 w-3 rounded-full blur-[2px] ${status === 'idle' ? 'bg-amber-500' : status === 'event' ? 'bg-rose-500' : 'bg-emerald-500'} shadow-[0_0_10px_rgba(0,255,100,0.5)]`}></div>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">{t('status')} // {error || t(status)}</span>
+                        </div>
+                        {/* 居中标题 */}
+                        {/* 居中标题与 Logo */}
+                        <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-3 group cursor-pointer">
+                            <div className="relative">
+                                <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                                <div className="logo-grid">
+                                    {[...Array(9)].map((_, i) => <div key={i} className="logo-dot"></div>)}
+                                </div>
+                            </div>
+                            <div className="flex flex-col">
+                                <h1 className="text-2xl font-black tracking-tighter text-white neon-text leading-none">
+                                    DAS<span className="text-cyan-400">Matrix</span>
+                                </h1>
+                                <span className="text-[8px] font-mono tracking-[0.3em] text-cyan-200/40 uppercase">{t('title')}</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center space-x-6">
+                            <div className="flex bg-black/50 p-1 rounded-xl border border-white/5">
+                                <button onClick={() => setLang('cn')} className={`px-4 py-1.5 rounded-lg text-[10px] uppercase font-bold transition-all ${lang === 'cn' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-zinc-500'}`}>ZH</button>
+                                <button onClick={() => setLang('en')} className={`px-4 py-1.5 rounded-lg text-[10px] uppercase font-bold transition-all ${lang === 'en' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-zinc-500'}`}>EN</button>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-grow grid grid-cols-12 gap-5 overflow-hidden">
+                        {/* Waterfall View with Axes */}
+                        <section className="col-span-12 lg:col-span-8 glass p-6 rounded-3xl flex flex-col relative overflow-hidden group">
+                            <div className="flex justify-between items-end mb-4">
+                                <h2 className="text-[11px] font-black opacity-30 uppercase tracking-[0.3em]">{t('waterfall')}</h2>
+                                <span className="text-[10px] font-mono opacity-20">2D SPATIO-TEMPORAL FIELD</span>
+                            </div>
+                            
+                            <div className="flex-grow flex relative border border-white/5 rounded-xl bg-black overflow-hidden group-hover:border-cyan-500/20 transition-colors">
+                                {/* Scanline effect */}
+                                <div className="scanline"></div>
+                                
+                                {/* Y-Axis (Time) */}
+                                {/* Y-Axis (Time): New (Top) -> Old (Bottom) */}
+                                <div className="w-16 h-full flex flex-col justify-between py-2 border-r border-white/5 bg-zinc-900/30">
+                                    <span className="axis-label text-center font-mono text-[9px] whitespace-nowrap overflow-visible z-10">{formatTime(currentTime)}</span>
+                                    <span className="axis-label text-center font-mono text-[9px] whitespace-nowrap overflow-visible z-10">{formatTime(currentTime - (config?.buffer_duration || 10) / 2)}</span>
+                                    <span className="axis-label text-center font-mono text-[9px] whitespace-nowrap overflow-visible z-10">{formatTime(currentTime - (config?.buffer_duration || 10))}</span>
+                                </div>
+                                
+                                <div className="flex-grow flex flex-col relative cursor-crosshair">
+                                    <canvas 
+                                        ref={canvasRef} 
+                                        width={1200} 
+                                        height={800} 
+                                        className="w-full h-full object-cover"
+                                        onMouseMove={handleCanvasMouseMove}
+                                        onMouseLeave={handleCanvasMouseLeave}
+                                    ></canvas>
+                                    
+
+                                    
+                                    {/* X-Axis (Channel) */}
+                                    <div className="h-10 w-full flex justify-between px-4 border-t border-white/5 bg-zinc-900/30">
+                                        <span className="axis-label self-center">CH 0</span>
+                                        <span className="axis-label self-center">CH {Math.floor((config?.n_channels||128)/2)}</span>
+                                        <span className="axis-label self-center">CH {config?.n_channels||128 - 1}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside className="col-span-12 lg:col-span-4 flex flex-col space-y-5">
+                            {/* Analysis View */}
+                            <div className="flex-[2.5] glass p-6 rounded-3xl flex flex-col relative border-t-[3px] border-cyan-500/50">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex flex-col">
+                                        <h2 className="text-[11px] font-black opacity-30 uppercase tracking-[0.3em]">{t('detail')}</h2>
+                                        <span className="text-[9px] text-cyan-400/50 font-mono">LIVE CHANNEL SERIALIZTION</span>
+                                    </div>
+                                    <div className="flex items-center space-x-3 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 hover:border-cyan-400/40 transition-all">
+                                        <span className="text-[9px] opacity-40 font-bold">FOCUS CH</span>
+                                        <input type="number" value={focusChannel} onChange={(e) => handleChannelChange(e.target.value)}
+                                            className="w-10 bg-transparent text-[11px] font-black text-cyan-400 outline-none text-center" />
+                                    </div>
+                                </div>
+                                <div id="detail-chart" className="flex-grow w-full"></div>
+                                <div className="bg-cyan-500/5 p-3 rounded-xl border border-cyan-500/10 flex justify-between mt-2">
+                                    <div className="flex flex-col"><span className="text-[8px] opacity-40 uppercase">Max Amp</span><span className="text-sm font-bold text-cyan-400">{metrics.max?.toFixed(3)}</span></div>
+                                    <div className="flex flex-col"><span className="text-[8px] opacity-40 uppercase">RMS Level</span><span className="text-sm font-bold text-amber-400">{metrics.rms?.toFixed(3)}</span></div>
+                                </div>
+                            </div>
+                            
+                            {/* Stats Panel - INCREASED SPACE */}
+                            <div className="flex-[2] glass p-6 rounded-3xl flex flex-col">
+                                <h2 className="text-[11px] font-black opacity-30 mb-4 uppercase tracking-[0.3em]">{t('metrics')}</h2>
+                                <div id="metrics-chart" className="flex-grow w-full"></div>
+                            </div>
+
+                            {/* Alert Log - SLIGHTLY SMALLER */}
+                            <div className="h-36 glass p-6 rounded-3xl flex flex-col bg-rose-950/5">
+                                <h2 className="text-[11px] font-black opacity-30 mb-3 uppercase tracking-[0.3em]">{t('log')}</h2>
+                                <div className="flex-grow overflow-y-auto space-y-1.5 font-mono text-[9px] scrollbar-hide">
+                                    {logs.length === 0 ? <p className="opacity-10 italic">Passive monitoring active...</p> : 
+                                        logs.map((log, i) => (
+                                            <div key={i} className="flex space-x-3 animate-fadeIn py-1 border-b border-white/5 group">
+                                                <span className="text-zinc-600 font-bold">[{log.time}]</span>
+                                                <span className="text-rose-400/80 group-hover:text-rose-400 transition-colors uppercase">{log.msg}</span>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+                        </aside>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
