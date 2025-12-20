@@ -48,12 +48,19 @@ def verify_integrated_plots():
     assert isinstance(fig_std, plt.Figure)
     plt.close(fig_std)
 
-    # 6. 测试通道切片
-    print("Testing plot_rms(channels=slice(20, 40))...")
+    # 6. 测试通道切片 (绝对点位显示)
+    print("Testing plot_rms(channels=slice(20, 40)) for absolute indices...")
     fig_sliced = frame.plot_rms(channels=slice(20, 40))
     assert isinstance(fig_sliced, plt.Figure)
+
     # 验证数据点数量是否匹配切片长度 (20)
-    assert len(fig_sliced.axes[0].get_lines()[0].get_xdata()) == 20
+    xdata = fig_sliced.axes[0].get_lines()[0].get_xdata()
+    assert len(xdata) == 20
+
+    # 验证 X 轴范围是否反映了绝对坐标 (20 到 39)
+    assert np.allclose(xdata[0], 20.0)
+    assert np.allclose(xdata[-1], 39.0)
+    print("Absolute index verification successful!")
     plt.close(fig_sliced)
 
     # 7. 测试链式调用

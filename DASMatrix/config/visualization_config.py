@@ -246,22 +246,21 @@ class VisualizationConfig:
             "ytick.right": True,
             "xtick.minor.visible": self.show_minor_ticks,
             "ytick.minor.visible": self.show_minor_ticks,
-            # 字体 - 中文字体优先，确保中文正确显示
+            # 字体 - 优先使用期刊标准 (Arial/Helvetica)，中文回退到高质量黑体
             "font.family": "sans-serif",
             "font.sans-serif": [
-                self.typography.cjk_family,  # 中文字体优先 (STHeiti)
-                "PingFang SC",  # macOS 苹方 (首选)
-                "Heiti SC",  # macOS 黑体 (首选)
-                "Songti SC",  # macOS 宋体
-                "STHeiti",  # macOS 华文黑体
-                "Heiti TC",  # macOS 黑体繁体
-                "Noto Sans CJK SC",  # Linux 原生
-                "Noto Serif SC",  # Linux 原生
+                "Arial",  # Nature/Science 标准 (优先保证英文数字美观)
+                "Helvetica",  # Nature/Science 标准
+                "PingFang SC",  # macOS 苹方 (高质量中文)
                 "Microsoft YaHei",  # Windows 微软雅黑
-                self.typography.family,
-                "Helvetica",
-                "Arial",
-                "DejaVu Sans",
+                "Heiti SC",  # macOS 黑体
+                "STHeiti",  # macOS 华文黑体
+                "Noto Sans CJK SC",  # Linux/通用的开源 CJK 字体
+                "Source Han Sans SC",  # 思源黑体
+                "SimHei",  # Windows 基础黑体 (兜底)
+                "DejaVu Sans",  # 开源通用回退
+                "Liberation Sans",  # Linux 通用回退
+                "sans-serif",  # 系统默认兜底
             ],
             "font.size": self.typography.label,
             "axes.labelsize": self.typography.label,

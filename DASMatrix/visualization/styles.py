@@ -4,6 +4,7 @@
 """
 
 import contextlib
+import warnings
 from typing import Any, Optional, Tuple, Union
 
 import matplotlib.colors as colors
@@ -30,6 +31,10 @@ def apply_nature_style(config: Optional[VisualizationConfig] = None) -> None:
     """
     if config is None:
         config = VisualizationConfig()
+
+    # 抑制因字体回退导致的警告（例如 Arial 不含中文，但我们会回落到其他字体）
+    warnings.filterwarnings("ignore", message=".*Glyph.*missing from current font.*")
+    warnings.filterwarnings("ignore", message=".*Glyph.*missing from font.*")
 
     # 重置为默认样式
     plt.style.use("default")

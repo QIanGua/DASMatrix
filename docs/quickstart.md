@@ -80,8 +80,8 @@ result = processed.collect()
 # 时间序列图
 processed.plot_ts(ch=0, title="Channel 0")
 
-# 热图/瀑布图
-processed.plot_heatmap(title="DAS Waterfall")
+# 热图/瀑布图 (支持切片查看)
+processed.plot_heatmap(channels=slice(400, 700), title="Waterfall (Ch 400-700)")
 
 # 频谱图
 processed.plot_spec(ch=0, title="Spectrogram")
@@ -90,9 +90,19 @@ processed.plot_spec(ch=0, title="Spectrogram")
 processed.plot_fk(dx=1.0, v_lines=[1500, 3000], title="FK Spectrum")
 
 # 集成剖面图 (Profile Plots)
-processed.plot_rms(title="RMS Profile")
-processed.plot_mean(title="Mean Profile")
-processed.plot_std(title="Std Profile")
+processed.plot_rms(
+    x_axis="channel", channels=slice(40,100), title="RMS Profile"
+)
+processed.plot_mean(
+    x_axis="channel", channels=slice(40,100), title="Mean Profile"
+)
+processed.plot_std(
+    x_axis="channel", channels=slice(40,100), title="Std Profile"
+)
+
+> [!NOTE]
+> 所有的绘图方法现在都支持**绝对坐标**。即使你对数据进行了 `.slice()` 切片，
+> 图表的轴（时间、点位）也会正确显示原始的绝对位置，而不再从 0 开始。
 ```
 
 ---

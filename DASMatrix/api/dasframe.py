@@ -404,7 +404,7 @@ class DASFrame:
                 raise ValueError("Provided ax must belong to a figure")
             fig = cast(plt.Figure, ax.figure)
 
-        t = np.arange(data.shape[0]) / self._fs
+        t = self._data.time.values
         if ch is None:
             ax.plot(t, data[:, : min(5, data.shape[1])], alpha=0.7)
         else:
@@ -492,21 +492,19 @@ class DASFrame:
         Returns:
             matplotlib Figure 对象。
         """
-        data = self.collect()
+        if t_range is not None or channels is not None:
+            # 提醒用户优先使用 .slice()
+            import warnings
 
-        # 应用时间切片
-        if t_range is not None:
-            data = data[t_range, :]
-            t_start = (t_range.start or 0) / self._fs
+            warnings.warn(
+                "Using t_range or channels in plot_heatmap is deprecated. "
+                "Please use .slice() instead."
+            )
+            frame = self.slice(t=t_range or slice(None), x=channels or slice(None))
         else:
-            t_start = 0.0
+            frame = self
 
-        # 应用通道切片
-        if channels is not None:
-            data = data[:, channels]
-            ch_start = channels.start or 0
-        else:
-            ch_start = 0
+        data = frame.collect()
 
         if ax is None:
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -515,11 +513,15 @@ class DASFrame:
                 raise ValueError("Provided ax must belong to a figure")
             fig = cast(plt.Figure, ax.figure)
 
+        # 获取绝对坐标边界
+        dist_coords = frame._data.distance.values / self._dx
+        time_coords = frame._data.time.values
+
         extent = (
-            ch_start,
-            ch_start + float(data.shape[1]),
-            t_start + float(data.shape[0] / self._fs),
-            t_start,
+            dist_coords[0] - 0.5,
+            dist_coords[-1] + 0.5,
+            time_coords[-1] + 0.5 / self._fs,
+            time_coords[0] - 0.5 / self._fs,
         )
         vmax = np.percentile(np.abs(data), 98)
         im = ax.imshow(
@@ -616,7 +618,8 @@ class DASFrame:
         plotter = ProfilePlot()
 
         if x_axis == "channel":
-            distances = np.arange(len(values))
+            # 这里的距离坐标除以 dx 得到绝对点位索引
+            distances = frame._data.distance.values / self._dx
             if "xlabel" not in kwargs:
                 kwargs["xlabel"] = "Channel"
         else:
