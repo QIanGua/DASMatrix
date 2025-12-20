@@ -282,9 +282,9 @@ class DASDashboard:
         if n_samples >= self.n_samples_buffer:
             self.data_buffer = chunk[-self.n_samples_buffer :].astype(np.float64)
         else:
-            self.data_buffer = np.roll(
-                self.data_buffer, -n_samples, axis=0
-            ).astype(np.float64)
+            self.data_buffer = np.roll(self.data_buffer, -n_samples, axis=0).astype(
+                np.float64
+            )
             self.data_buffer[-n_samples:] = chunk
 
         # 1. 更新瀑布图

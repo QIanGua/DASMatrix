@@ -37,3 +37,10 @@ docs-serve:
 # Deploy docs to GitHub Pages
 docs-deploy:
     uv run mkdocs gh-deploy
+
+# Run all checks (lint, format check, typecheck, test)
+check-all:
+    just lint
+    uv run ruff format --check .
+    just typecheck
+    just test

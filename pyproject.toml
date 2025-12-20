@@ -60,6 +60,7 @@ dev = [
     "mkdocs-literate-nav>=0.6.0",
     "mkdocs-section-index>=0.3.0",
     "ruff>=0.1.0",
+    "pre-commit>=4.3.0",
 ]
 
 [tool.mypy]

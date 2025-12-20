@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI):
     yield
     is_ready = False
 
+
 app = FastAPI(title="DASMatrix Web Dashboard", lifespan=lifespan)
 
 # 允许跨域 (防止某些浏览器安全限制)
@@ -133,7 +134,6 @@ is_ready = False
 
 
 # Lifespan handled above
-
 
 
 # 静态文件挂载 (确保 /ws 不被覆盖)
