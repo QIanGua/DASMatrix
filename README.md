@@ -30,15 +30,18 @@ DASMatrix 是一个专为分布式声学传感（DAS）数据处理和分析设�
 
 ### 安装步骤
 
+推荐使用 [uv](https://github.com/astral-sh/uv) 进行极速安装和依赖管理。
+
 ```bash
 # 从 GitHub 克隆仓库
 git clone https://github.com/yourusername/DASMatrix.git
 cd DASMatrix
 
-# 安装依赖
-pip install -r requirements.txt
+# 方式一：使用 uv (推荐)
+# 这将自动创建虚拟环境并同步所有依赖
+uv sync
 
-# 安装库
+# 方式二：使用 pip
 pip install -e .
 ```
 
