@@ -389,4 +389,817 @@ def fused_kernel(x, out):
 - 📋 详细的 DSL 语法文档
 - 📋 性能基准测试报告
 
+---
+
+## 9. 竞品分析与差距评估
+
+> 基于 2024-12 对主流开源 DAS 处理库的全面调研
+
+### 9.1 主要竞品概览
+
+| 特性 | DASMatrix | DASCore | Xdas | DASPy |
+|------|-----------|---------|------|-------|
+| **GitHub Stars** | 新项目 | 63★ | 38★ | 84★ |
+| **核心后端** | Xarray/Dask | 自定义 Patch/Spool | Xarray-like | ObsPy + NumPy |
+| **文件格式支持** | 4种 | 20+ 种 | 10+ 种 | 10+ 种 |
+| **延迟计算** | ✅ Dask | ✅ 自定义 | ✅ 自定义 | ❌ 即时计算 |
+| **多文件虚拟合并** | 📋 计划 | ✅ Spool | ✅ open_mfdataarray | ❌ |
+| **分块处理 (OOC)** | ✅ Dask | ✅ 原生 | ✅ Atoms | ❌ |
+| **GPU 支持** | 📋 计划 | 📋 计划 | ❌ | ❌ |
+| **流处理** | 🚧 部分 | ❌ | ✅ | ❌ |
+| **元数据管理** | 简单 | 完善 (Inventory) | 完善 | ObsPy 兼容 |
+| **可视化** | ✅ Matplotlib | ✅ 基础 | ✅ 基础 | ✅ |
+| **Web Dashboard** | ✅ FastAPI | ❌ | ❌ | ❌ |
+| **文档质量** | 🚧 | ✅✅✅ (Quarto) | ✅✅ | ✅✅ |
+| **测试覆盖** | 🚧 ~60% | ✅ 99.5% | ✅ ~85% | ✅ ~80% |
+
+### 9.2 竞品独特亮点
+
+**DASCore (<https://github.com/DASDAE/dascore>)**
+
+- 支持 20+ DAS 文件格式 (APSENSING, FEBUS, TERRA15, PRODML 等)
+- `Spool` 抽象统一管理多文件数据集和文件归档
+- 完善的元数据 `Inventory` 规划 (遵循 PRODML/DAS-RCN 标准)
+- 与 ObsPy/Pandas/Xarray 双向互转
+- 测试覆盖率 99.5%, 文档完善 (Quarto)
+
+**Xdas (<https://github.com/xdas-dev/xdas>)**
+
+- `open_mfdataarray` 多文件虚拟合并
+- `Atoms` 有状态流水线处理框架, 支持分块处理时保持滤波器状态
+- HDF5 压缩支持 (Zfp 等)
+- 多线程信号处理函数
+
+**DASPy (<https://github.com/HMZ-03/DASPy>)**
+
+- 专业地震学算法 (去噪、波形分解、应变-速度转换)
+- 学术论文支持 (SRL 2024)
+- 完整中英文教程文档
+
+### 9.3 DASMatrix 现有优势
+
+1. **架构设计前瞻性**: 基于 Xarray + Dask 的现代架构, 混合执行引擎 + 计算图优化
+2. **Web 实时监控**: FastAPI + WebSocket Dashboard (竞品均未实现)
+3. **Nature/Science 级可视化**: 专业出版级样式配置
+4. **PRD 文档完善**: 清晰的技术愿景和性能目标
+
+### 9.4 关键差距 (需优先弥补)
+
+| 差距项 | 当前状态 | 目标状态 | 影响 |
+|--------|----------|----------|------|
+| 文件格式支持 | 4 种 | 15+ 种 | 无法处理实际 DAS 数据 |
+| 多文件管理 | 无 | Spool 抽象 | 无法处理 TB 级多文件数据集 |
+| 元数据管理 | 简单字典 | Inventory 系统 | 无法标准化元数据 |
+| 互操作性 | 无 | ObsPy/DASCore 互转 | 与地震学生态隔离 |
+| 测试覆盖 | ~60% | 90%+ | 代码质量无保障 |
+| 有状态处理 | 无 | Atoms 框架 | 分块处理时滤波不连续 |
+
+---
+
+## 10. 优化方向与详细方案
+
+### 10.1 P0 优先级: 文件格式扩展
+
+**问题**: 仅支持 4 种格式, 无法满足实际 DAS 数据处理需求
+
+**目标格式** (按使用频率排序):
+
+| 格式 | 厂商/标准 | 优先级 |
+|------|-----------|--------|
+| TERRA15 | Terra15 | P0 |
+| PRODML v2.0/v2.1 | 工业标准 | P0 |
+| FEBUS | Febus Optics | P0 |
+| APSENSING | AP Sensing | P1 |
+| SILIXA_H5 | Silixa | P1 |
+| OPTODAS | OptaSense | P1 |
+| TDMS | LabVIEW/NI | P1 |
+| ZARR | 云原生 | P1 |
+| NETCDF | 科学数据标准 | P2 |
+
+**技术方案**:
+
+```python
+# DASMatrix/acquisition/formats/base.py
+from abc import ABC, abstractmethod
+from typing import Protocol, Optional, Dict, Any
+from pathlib import Path
+import xarray as xr
+
+class FormatPlugin(Protocol):
+    """DAS 文件格式插件协议"""
+
+    format_name: str
+    version: str
+    file_extensions: tuple[str, ...]
+
+    def can_read(self, path: Path) -> bool:
+        """快速检测文件是否为该格式"""
+        ...
+
+    def scan(self, path: Path) -> Dict[str, Any]:
+        """快速扫描元数据, 不加载数据"""
+        ...
+
+    def read(self, path: Path, **kwargs) -> xr.DataArray:
+        """读取数据为 xr.DataArray"""
+        ...
+
+    def write(self, data: xr.DataArray, path: Path, **kwargs) -> None:
+        """写入数据"""
+        ...
+
+# DASMatrix/acquisition/formats/registry.py
+class FormatRegistry:
+    """格式注册表, 支持动态发现和注册"""
+
+    _formats: Dict[str, FormatPlugin] = {}
+
+    @classmethod
+    def register(cls, plugin: FormatPlugin) -> None:
+        cls._formats[plugin.format_name] = plugin
+
+    @classmethod
+    def detect_format(cls, path: Path) -> Optional[str]:
+        """自动检测文件格式"""
+        for name, plugin in cls._formats.items():
+            if plugin.can_read(path):
+                return name
+        return None
+
+    @classmethod
+    def read(cls, path: Path, format: Optional[str] = None) -> xr.DataArray:
+        """统一读取接口"""
+        if format is None:
+            format = cls.detect_format(path)
+        if format is None:
+            raise ValueError(f"Unknown format: {path}")
+        return cls._formats[format].read(path)
+```
+
+**实施步骤**:
+
+1. 参考 DASCore 的格式实现 (MIT 协议兼容)
+2. 为每种格式创建 `FormatPlugin` 实现
+3. 添加 `get_format()` 自动检测功能
+4. 添加格式注册表和插件动态发现机制
+
+---
+
+### 10.2 P0 优先级: 多文件 Spool 管理
+
+**问题**: 无法处理 TB 级多文件数据集
+
+**技术方案**:
+
+```python
+# DASMatrix/api/spool.py
+from typing import Union, Optional, Iterator, Tuple, List
+from pathlib import Path
+import xarray as xr
+
+class DASSpool:
+    """DAS 数据集管理器, 统一多文件访问接口
+
+    功能:
+    - 虚拟合并多个文件为单一数据集视图
+    - 支持时间/空间范围查询
+    - 支持分块迭代处理
+    - 支持索引缓存加速二次访问
+
+    Example:
+        >>> spool = dm.spool("/data/das/*.h5").update()
+        >>> subset = spool.select(time=("2024-01-01", "2024-01-02"))
+        >>> for frame in subset.chunk(time=60_000):
+        ...     processed = frame.bandpass(1, 100).collect()
+    """
+
+    def __init__(
+        self,
+        path: Union[str, Path, List[Path]],
+        format: Optional[str] = None,
+    ):
+        """初始化 Spool
+
+        Args:
+            path: 单文件路径、目录路径、通配符模式或文件列表
+            format: 强制指定格式, None 表示自动检测
+        """
+        self._paths: List[Path] = []
+        self._index: Optional[xr.Dataset] = None  # 元数据索引
+        self._format = format
+        self._resolve_paths(path)
+
+    def update(self) -> "DASSpool":
+        """更新文件索引 (增量扫描新文件)"""
+        ...
+        return self
+
+    def select(
+        self,
+        time: Optional[Tuple[str, str]] = None,
+        distance: Optional[Tuple[float, float]] = None,
+        **kwargs
+    ) -> "DASSpool":
+        """延迟筛选子集 (返回新 Spool, 不加载数据)"""
+        ...
+
+    def chunk(
+        self,
+        time: Optional[int] = None,
+        overlap: Optional[int] = None,
+    ) -> "DASSpool":
+        """指定输出分块策略"""
+        ...
+
+    def __iter__(self) -> Iterator["DASFrame"]:
+        """迭代返回 DASFrame 对象"""
+        ...
+
+    def __getitem__(self, idx: int) -> "DASFrame":
+        """索引访问"""
+        ...
+
+    def __len__(self) -> int:
+        """返回分块数量"""
+        ...
+
+    def to_zarr(self, path: str, virtual: bool = True) -> None:
+        """导出为 Zarr 格式
+
+        Args:
+            path: 输出路径
+            virtual: True 表示仅写入虚拟链接, False 表示复制数据
+        """
+        ...
+
+    def to_netcdf(self, path: str, virtual: bool = True) -> None:
+        """导出为 NetCDF 格式 (支持虚拟链接)"""
+        ...
+
+# 便捷函数
+def spool(path: Union[str, Path, List[Path]], **kwargs) -> DASSpool:
+    """创建 Spool 的便捷函数"""
+    return DASSpool(path, **kwargs)
+```
+
+**使用示例**:
+
+```python
+import dasmatrix as dm
+
+# 创建并更新索引
+spool = dm.spool("/data/das/2024/*.h5").update()
+
+# 筛选子集
+subset = spool.select(
+    time=("2024-01-01T00:00:00", "2024-01-01T12:00:00"),
+    distance=(1000, 5000),
+)
+
+# 分块处理
+for frame in subset.chunk(time=60_000, overlap=1_000):
+    result = (
+        frame
+        .detrend()
+        .bandpass(1, 100)
+        .collect()
+    )
+    # 保存结果...
+```
+
+---
+
+### 10.3 P1 优先级: 元数据 Inventory 系统
+
+**问题**: 缺少结构化元数据管理, 无法与 PRODML/DAS-RCN 标准兼容
+
+**技术方案**:
+
+```python
+# DASMatrix/core/inventory.py
+from pydantic import BaseModel, Field
+from typing import List, Optional, Tuple
+from datetime import datetime
+
+class FiberGeometry(BaseModel):
+    """光缆几何信息"""
+    coordinates: Optional[List[Tuple[float, float, float]]] = None  # (lon, lat, depth)
+    gauge_length: float = Field(..., description="标距长度 (m)")
+    channel_spacing: float = Field(..., description="通道间距 (m)")
+    total_length: Optional[float] = None  # 光缆总长度 (m)
+
+class Interrogator(BaseModel):
+    """询问器配置"""
+    manufacturer: Optional[str] = None
+    model: str
+    serial_number: Optional[str] = None
+    sampling_rate: float = Field(..., description="采样率 (Hz)")
+    pulse_width: Optional[float] = None  # 脉冲宽度 (ns)
+    pulse_rate: Optional[float] = None  # 脉冲重复率 (Hz)
+
+class Acquisition(BaseModel):
+    """采集元数据"""
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    n_channels: int
+    n_samples: Optional[int] = None
+    data_unit: str = "strain_rate"  # strain, strain_rate, velocity
+
+class ProcessingStep(BaseModel):
+    """处理步骤记录"""
+    operation: str
+    parameters: dict
+    timestamp: datetime
+    software: str = "DASMatrix"
+    version: str
+
+class DASInventory(BaseModel):
+    """DAS 数据集元数据清单
+
+    遵循 PRODML v2.1 / DAS-RCN 元数据标准
+    """
+
+    # 基础信息
+    project: str
+    experiment: Optional[str] = None
+    description: Optional[str] = None
+
+    # 设备信息
+    fiber: Optional[FiberGeometry] = None
+    interrogator: Optional[Interrogator] = None
+
+    # 采集信息
+    acquisition: Acquisition
+
+    # 处理历史
+    processing_history: List[ProcessingStep] = []
+
+    # 自定义属性
+    custom_attrs: dict = {}
+
+    def to_json(self, path: Optional[str] = None) -> str:
+        """导出为 JSON"""
+        ...
+
+    def to_parquet(self, path: str) -> None:
+        """导出为 Parquet (用于快速查询)"""
+        ...
+
+    @classmethod
+    def from_prodml(cls, path: str) -> "DASInventory":
+        """从 PRODML 文件解析"""
+        ...
+
+    @classmethod
+    def from_h5_attrs(cls, path: str) -> "DASInventory":
+        """从 HDF5 属性解析"""
+        ...
+```
+
+---
+
+### 10.4 P1 优先级: Atoms 有状态流水线
+
+**问题**: 大文件分块处理时, 有状态操作 (如 IIR 滤波) 无法保持连续性
+
+**技术方案** (参考 Xdas):
+
+```python
+# DASMatrix/processing/atoms.py
+from abc import ABC, abstractmethod
+from typing import Callable, List, Optional, Any
+import numpy as np
+from scipy import signal
+
+class Atom(ABC):
+    """原子处理单元, 支持有状态操作
+
+    Atom 是处理流水线的基本构建块, 特点:
+    - 可以保持内部状态 (如滤波器状态)
+    - 支持分块调用时状态连续传递
+    - 可组合为复杂流水线
+    """
+
+    @abstractmethod
+    def __call__(self, data: "DASFrame") -> "DASFrame":
+        """处理数据"""
+        ...
+
+    def reset(self) -> None:
+        """重置内部状态"""
+        pass
+
+class Partial(Atom):
+    """将普通函数包装为无状态 Atom"""
+
+    def __init__(self, func: Callable, *args, **kwargs):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self, data: "DASFrame") -> "DASFrame":
+        return self.func(data, *self.args, **self.kwargs)
+
+class LFilter(Atom):
+    """有状态 IIR 滤波器
+
+    支持分块处理时保持滤波器状态连续, 避免边界效应
+    """
+
+    def __init__(self, b: np.ndarray, a: np.ndarray, dim: str = "time"):
+        self.b = b
+        self.a = a
+        self.dim = dim
+        self._zi: Optional[np.ndarray] = None
+
+    def __call__(self, data: "DASFrame") -> "DASFrame":
+        arr = data.collect()
+
+        if self._zi is None:
+            # 初始化滤波器状态
+            zi = signal.lfilter_zi(self.b, self.a)
+            self._zi = np.tile(zi[:, np.newaxis], (1, arr.shape[1]))
+
+        # 带状态滤波
+        filtered, self._zi = signal.lfilter(
+            self.b, self.a, arr, axis=0, zi=self._zi
+        )
+
+        return DASFrame(filtered, fs=data.fs, dx=data._dx)
+
+    def reset(self) -> None:
+        self._zi = None
+
+class SosFilt(Atom):
+    """有状态 SOS (二阶节) 滤波器"""
+
+    def __init__(self, sos: np.ndarray, dim: str = "time"):
+        self.sos = sos
+        self.dim = dim
+        self._zi: Optional[np.ndarray] = None
+
+    def __call__(self, data: "DASFrame") -> "DASFrame":
+        arr = data.collect()
+
+        if self._zi is None:
+            zi = signal.sosfilt_zi(self.sos)
+            self._zi = np.tile(zi[:, :, np.newaxis], (1, 1, arr.shape[1]))
+
+        filtered, self._zi = signal.sosfilt(
+            self.sos, arr, axis=0, zi=self._zi
+        )
+
+        return DASFrame(filtered, fs=data.fs, dx=data._dx)
+
+    def reset(self) -> None:
+        self._zi = None
+
+class Sequential(Atom):
+    """顺序组合多个 Atom"""
+
+    def __init__(self, atoms: List[Atom]):
+        self.atoms = atoms
+
+    def __call__(self, data: "DASFrame") -> "DASFrame":
+        for atom in self.atoms:
+            data = atom(data)
+        return data
+
+    def reset(self) -> None:
+        for atom in self.atoms:
+            atom.reset()
+
+class Parallel(Atom):
+    """并行执行多个 Atom, 返回结果列表"""
+
+    def __init__(self, atoms: List[Atom]):
+        self.atoms = atoms
+
+    def __call__(self, data: "DASFrame") -> List["DASFrame"]:
+        return [atom(data) for atom in self.atoms]
+```
+
+**使用示例**:
+
+```python
+from scipy.signal import iirfilter
+from DASMatrix.processing.atoms import Sequential, Partial, SosFilt
+
+# 设计高通滤波器
+sos = iirfilter(4, 10, btype="high", fs=1000, output="sos")
+
+# 构建有状态流水线
+pipeline = Sequential([
+    Partial(lambda df: df.detrend()),
+    SosFilt(sos, dim="time"),  # 有状态, 分块处理时保持连续
+    Partial(lambda df: df.envelope()),
+])
+
+# 分块处理大文件 (滤波器状态自动传递)
+for chunk in spool.chunk(time=10_000):
+    result = pipeline(chunk)
+    result.to_zarr("output/", append=True)
+
+# 处理完成后重置状态
+pipeline.reset()
+```
+
+---
+
+### 10.5 P1 优先级: 互操作性增强
+
+**问题**: 与 ObsPy/DASCore 生态隔离
+
+**技术方案**:
+
+```python
+# DASMatrix/api/interop.py
+# 在 DASFrame 类中添加互操作方法
+
+class DASFrame:
+    # ... 现有方法 ...
+
+    # === 互操作方法 ===
+
+    def to_obspy(self) -> "obspy.Stream":
+        """转换为 ObsPy Stream
+
+        用于与地震学工具链集成, 如 ObsPy, EQcorrscan 等
+        """
+        from obspy import Stream, Trace, UTCDateTime
+
+        data = self.collect()
+        traces = []
+
+        for ch in range(data.shape[1]):
+            tr = Trace(data=data[:, ch].astype(np.float32))
+            tr.stats.sampling_rate = self._fs
+            tr.stats.channel = f"CH{ch:04d}"
+            tr.stats.starttime = UTCDateTime(0)  # 或从元数据获取
+            tr.stats.network = "DAS"
+            tr.stats.station = f"S{ch:04d}"
+            traces.append(tr)
+
+        return Stream(traces)
+
+    def to_dascore(self) -> "dascore.Patch":
+        """转换为 DASCore Patch"""
+        import dascore as dc
+
+        return dc.Patch(
+            data=self.collect(),
+            coords={
+                "time": self._data.time.values,
+                "distance": self._data.distance.values,
+            },
+            dims=("time", "distance"),
+            attrs={"fs": self._fs, "dx": self._dx},
+        )
+
+    def to_xdas(self) -> "xdas.DataArray":
+        """转换为 Xdas DataArray"""
+        import xdas
+
+        return xdas.DataArray(
+            self._data.values,
+            dims=("time", "distance"),
+            coords={
+                "time": self._data.time.values,
+                "distance": self._data.distance.values,
+            },
+        )
+
+    def to_dataframe(self) -> "pd.DataFrame":
+        """转换为 Pandas DataFrame (长格式)"""
+        import pandas as pd
+
+        return self._data.to_dataframe().reset_index()
+
+    @classmethod
+    def from_obspy(
+        cls,
+        stream: "obspy.Stream",
+        dx: float = 1.0
+    ) -> "DASFrame":
+        """从 ObsPy Stream 创建 DASFrame"""
+        import numpy as np
+
+        data = np.stack([tr.data for tr in stream], axis=1)
+        fs = stream[0].stats.sampling_rate
+
+        return cls(data, fs=fs, dx=dx)
+
+    @classmethod
+    def from_dascore(cls, patch: "dascore.Patch") -> "DASFrame":
+        """从 DASCore Patch 创建 DASFrame"""
+        fs = 1.0 / float(patch.coords.step("time").total_seconds())
+        dx = float(patch.coords.step("distance"))
+
+        return cls(patch.data, fs=fs, dx=dx)
+
+    @classmethod
+    def from_xarray(cls, da: "xr.DataArray", fs: float, dx: float = 1.0) -> "DASFrame":
+        """从 Xarray DataArray 创建 DASFrame"""
+        return cls(da, fs=fs, dx=dx)
+```
+
+---
+
+### 10.6 P2 优先级: 测试与质量保障
+
+**目标**: 测试覆盖率从 ~60% 提升到 90%+
+
+**测试矩阵**:
+
+| 测试类别 | 测试项 | 验收标准 |
+|----------|--------|----------|
+| **精度测试** | FFT 峰值位置 | 误差 < 1 bin |
+| | 滤波器频率响应 | 通带衰减 < 0.5 dB |
+| | 积分/微分精度 | 相对误差 < 1e-6 |
+| **吞吐量测试** | bandpass (1GB 数据) | > 100 MB/s 单核 |
+| | FFT (1GB 数据) | > 500 MB/s 单核 |
+| | 文件读取 (HDF5) | > 200 MB/s |
+| **延迟测试** | 实时处理 (2k ch × 50kSps) | < 80 ms E2E |
+| **内存测试** | OOC 处理 10GB 文件 | 峰值内存 < 500 MB |
+| **兼容性测试** | 各格式读写 | 全部通过 |
+
+**测试框架**:
+
+```python
+# tests/conftest.py
+import pytest
+import numpy as np
+from DASMatrix import df
+
+@pytest.fixture
+def synthetic_das_data():
+    """生成合成 DAS 测试数据"""
+    np.random.seed(42)
+    fs = 1000
+    n_samples = 10000
+    n_channels = 100
+
+    t = np.arange(n_samples) / fs
+    signal = np.sin(2 * np.pi * 10 * t) + 0.5 * np.sin(2 * np.pi * 50 * t)
+
+    data = np.zeros((n_samples, n_channels))
+    for ch in range(n_channels):
+        shift = int(ch * 2)
+        data[:, ch] = np.roll(signal, shift) + 0.1 * np.random.randn(n_samples)
+
+    return df(data, fs=fs, dx=1.0)
+
+@pytest.fixture
+def large_synthetic_data():
+    """生成大规模测试数据 (用于性能测试)"""
+    np.random.seed(42)
+    return df(np.random.randn(100_000, 500), fs=10000, dx=1.0)
+
+# tests/test_accuracy.py
+class TestSignalProcessingAccuracy:
+    """信号处理精度测试"""
+
+    def test_bandpass_frequency_response(self, synthetic_das_data):
+        """验证带通滤波器频率响应"""
+        filtered = synthetic_das_data.bandpass(5, 20).collect()
+
+        spectrum = np.abs(np.fft.rfft(filtered[:, 0]))
+        freqs = np.fft.rfftfreq(len(filtered), 1/1000)
+
+        idx_10hz = np.argmin(np.abs(freqs - 10))
+        idx_50hz = np.argmin(np.abs(freqs - 50))
+
+        # 10Hz 应通过, 50Hz 应衰减 20dB+
+        assert spectrum[idx_10hz] > spectrum[idx_50hz] * 10
+
+    def test_fft_peak_location(self, synthetic_das_data):
+        """验证 FFT 峰值位置精度"""
+        fft_result = synthetic_das_data.fft()
+        # ... 验证峰值在预期频率
+
+# tests/test_performance.py
+class TestPerformance:
+    """性能基准测试"""
+
+    @pytest.mark.benchmark(group="bandpass")
+    def test_bandpass_throughput(self, benchmark, large_synthetic_data):
+        """带通滤波吞吐量测试"""
+        result = benchmark(lambda: large_synthetic_data.bandpass(1, 100).collect())
+
+        data_size_mb = large_synthetic_data.shape[0] * large_synthetic_data.shape[1] * 8 / 1e6
+        throughput = data_size_mb / result.stats.mean
+
+        assert throughput > 100, f"Throughput {throughput:.1f} MB/s < 100 MB/s"
+```
+
+---
+
+## 11. 实施路线图
+
+### 11.1 Phase 1: 基础完善 (2025 Q1, 8 周)
+
+| 任务 | 优先级 | 工时 | 负责人 | 依赖 |
+|------|--------|------|--------|------|
+| TERRA15 格式支持 | P0 | 1 周 | - | - |
+| PRODML v2.0/v2.1 格式支持 | P0 | 1 周 | - | - |
+| FEBUS 格式支持 | P0 | 1 周 | - | - |
+| 格式注册表与自动检测 | P0 | 0.5 周 | - | 上述格式 |
+| DASSpool 核心实现 | P0 | 2 周 | - | 格式支持 |
+| 单元测试完善 (覆盖率 80%+) | P1 | 1 周 | - | - |
+| MkDocs 文档完善 | P1 | 1 周 | - | - |
+
+**Phase 1 交付物**:
+
+- 支持 6+ 种主流 DAS 格式
+- DASSpool 多文件管理
+- 测试覆盖率 80%+
+- 完善的 API 文档
+
+### 11.2 Phase 2: 功能增强 (2025 Q2, 10 周)
+
+| 任务 | 优先级 | 工时 | 依赖 |
+|------|--------|------|------|
+| DASInventory 元数据系统 | P1 | 2 周 | - |
+| Atoms 有状态流水线 | P1 | 2 周 | - |
+| LFilter/SosFilt 有状态滤波 | P1 | 1 周 | Atoms |
+| ObsPy 互操作 | P1 | 1 周 | - |
+| DASCore 互操作 | P1 | 0.5 周 | - |
+| 性能基准测试套件 | P1 | 1 周 | - |
+| Zarr 存储后端 | P2 | 2 周 | - |
+| APSENSING/SILIXA 格式 | P1 | 1 周 | 格式框架 |
+
+**Phase 2 交付物**:
+
+- 完整的元数据管理系统
+- 有状态流水线处理
+- 与 ObsPy/DASCore 互操作
+- 性能基准测试报告
+
+### 11.3 Phase 3: 高级特性 (2025 Q3-Q4, 16 周)
+
+| 任务 | 优先级 | 工时 | 依赖 |
+|------|--------|------|------|
+| GPU (CuPy) 后端 | P2 | 4 周 | - |
+| Ray 分布式后端 | P2 | 4 周 | - |
+| 完整流处理支持 | P2 | 2 周 | - |
+| ML 检测器集成 | P2 | 2 周 | - |
+| PyPI 发布 | P1 | 1 周 | Phase 2 |
+| 教程视频制作 | P2 | 2 周 | 文档 |
+| 剩余格式支持 | P2 | 2 周 | - |
+
+**Phase 3 交付物**:
+
+- GPU 加速支持
+- 分布式计算支持
+- PyPI 正式发布
+- 完整教程和示例
+
+---
+
+## 12. 成功指标
+
+### 12.1 功能指标
+
+| 指标 | 当前 | Phase 1 目标 | Phase 2 目标 | Phase 3 目标 |
+|------|------|--------------|--------------|--------------|
+| 文件格式支持 | 4 | 8 | 12 | 15+ |
+| 测试覆盖率 | ~60% | 80% | 90% | 95% |
+| API 方法数 | ~50 | 70 | 100 | 120 |
+| 示例数量 | 5 | 10 | 15 | 20 |
+
+### 12.2 性能指标
+
+| 指标 | 当前 | 目标 |
+|------|------|------|
+| 带通滤波吞吐量 (单核) | ~50 MB/s | > 100 MB/s |
+| FFT 吞吐量 (单核) | ~200 MB/s | > 500 MB/s |
+| 文件读取速度 (HDF5) | ~100 MB/s | > 200 MB/s |
+| 实时处理延迟 | ~100 ms | < 50 ms |
+| OOC 内存占用 | 无限制 | < 500 MB |
+
+### 12.3 社区指标 (Phase 3 后)
+
+| 指标 | 目标 |
+|------|------|
+| GitHub Stars | 100+ |
+| PyPI 月下载量 | 500+ |
+| 贡献者数量 | 5+ |
+| 文档访问量 | 1000+ PV/月 |
+
+---
+
+## 13. 风险与缓解
+
+| 风险 | 可能性 | 影响 | 缓解措施 |
+|------|--------|------|----------|
+| 格式实现复杂度超预期 | 中 | 高 | 参考 DASCore 实现, 分批实现 |
+| 与竞品功能重叠 | 中 | 中 | 差异化定位 (Web Dashboard, GPU) |
+| 社区采用缓慢 | 中 | 中 | 加强文档、教程, 参与学术会议 |
+| 性能目标难以达成 | 低 | 高 | 渐进式优化, 优先保证正确性 |
+| 维护资源不足 | 中 | 高 | 明确核心功能优先级, 延迟低优先级特性 |
+
+---
+
 这一架构保留了原始设计的所有优点，同时通过DASFrame列式对象、多后端计算图、分级内存管理和DSL语法增强了易用性和性能，为用户提供了类似data.table的极简体验，并为未来的分布式扩展做好了准备。
+
+通过竞品分析明确了与成熟库的差距，制定了清晰的优化路线图，预计在 2025 年 Q3 可达到与 DASCore/Xdas 同等水平，并在 Web Dashboard、GPU 加速等方面形成差异化优势。

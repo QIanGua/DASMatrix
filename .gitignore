@@ -39,3 +39,7 @@ nb/output/
 nb/figs/
 nb/my_phase_plots/
 nb/idea_*.md
+.agent/workflows
+plots
+ty_report.txt
+examples/stft_spectrogram.py

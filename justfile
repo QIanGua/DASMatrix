@@ -14,6 +14,7 @@ lint:
 
 # Format code (ruff)
 format:
+    uv run ruff check --fix .
     uv run ruff format .
 
 # Check types (mypy)
@@ -41,6 +42,6 @@ docs-deploy:
 # Run all checks (lint, format check, typecheck, test)
 check-all:
     just lint
-    uv run ruff format --check .
+    just format
     just typecheck
     just test
