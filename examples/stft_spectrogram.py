@@ -51,7 +51,7 @@ class ProcessingConfig:
     wn: float = 0.1
     byte_order: str = "little"
 
-    # 分析范围 (1-indexed input, converted to 0-indexed internally)
+    # 分析范围 (0-indexed input, converted to 0-indexed internally)
     start_ch: int = 0
     end_ch: int = 45
 
