@@ -177,11 +177,14 @@ class TDMSFormatPlugin(FormatPlugin):
             if time_slice is not None:
                 start, end = time_slice
                 data = data[start:end]
-                time_coord = np.arange(start, end) / fs
+                time_coord = np.arange(end - start) / fs
             else:
                 time_coord = np.arange(n_samples) / fs
 
-            channel_coord = channels if channels is not None else list(range(n_ch))
+            if channels is not None:
+                channel_coord = list(channels)
+            else:
+                channel_coord = list(range(n_ch))
 
             if lazy:
                 data = da.from_array(data, chunks="auto")

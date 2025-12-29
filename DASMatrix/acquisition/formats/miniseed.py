@@ -68,10 +68,11 @@ class MiniSEEDFormatPlugin(FormatPlugin):
 
             n_traces = len(st)
             n_samples = st[0].stats.npts if n_traces > 0 else 0
-            if n_traces > 0:
-                fs = st[0].stats.sampling_rate
-            else:
-                fs = self.default_sampling_rate
+            fs = (
+                st[0].stats.sampling_rate
+                if n_traces > 0
+                else self.default_sampling_rate
+            )
 
             # 获取时间信息
             start_time = str(st[0].stats.starttime) if n_traces > 0 else None

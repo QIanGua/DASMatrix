@@ -203,9 +203,9 @@ class H5FormatPlugin(FormatPlugin):
             if channels is not None:
                 data = data[:, channels]
                 n_ch = len(channels)
-                channel_coord = channels
+                channel_coord = list(channels)
             else:
-                channel_coord = np.arange(n_ch)
+                channel_coord = list(range(n_ch))
 
             # 应用时间切片
             n_samples = dataset.shape[0]
@@ -213,7 +213,7 @@ class H5FormatPlugin(FormatPlugin):
                 start, end = time_slice
                 data = data[start:end]
                 n_samples = end - start
-                time_coord = np.arange(start, end) / fs
+                time_coord = np.arange(end - start) / fs
             else:
                 time_coord = np.arange(n_samples) / fs
 

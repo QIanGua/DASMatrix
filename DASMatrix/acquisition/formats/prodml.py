@@ -179,7 +179,7 @@ class PRODMLFormatPlugin(FormatPlugin):
             if time_slice is not None:
                 start, end = time_slice
                 data = data[start:end]
-                time_coord = np.arange(start, end) / fs
+                time_coord = np.arange(end - start) / fs
             else:
                 time_coord = np.arange(n_samples) / fs
 

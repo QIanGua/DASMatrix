@@ -123,15 +123,15 @@ class SEGYFormatPlugin(FormatPlugin):
         n_ch = data.shape[1]
         if channels is not None:
             data = data[:, channels]
-            channel_coord = channels
+            channel_coord = list(channels)
         else:
-            channel_coord = np.arange(n_ch)
+            channel_coord = list(range(n_ch))
 
         # 应用时间切片
         if time_slice is not None:
             start, end = time_slice
             data = data[start:end]
-            time_coord = np.arange(start, end) / fs
+            time_coord = np.arange(end - start) / fs
         else:
             time_coord = np.arange(data.shape[0]) / fs
 
