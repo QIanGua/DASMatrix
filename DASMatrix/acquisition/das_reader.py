@@ -1,3 +1,16 @@
+"""DAS 数据读取器
+
+该模块提供统一的数据读取接口, 支持多种 DAS 文件格式。
+
+推荐使用新的 FormatRegistry API:
+    >>> from DASMatrix.acquisition.formats import FormatRegistry
+    >>> data = FormatRegistry.read("data.h5")
+
+旧的 DASReader API 保持向后兼容:
+    >>> reader = DASReader(config, DataType.H5)
+    >>> data = reader.ReadRawData(file_path)
+"""
+
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -9,29 +22,30 @@ import dask.array as da
 import h5py
 import numpy as np
 import obspy  # type: ignore
+import xarray as xr
 
 from ..config.sampling_config import SamplingConfig
 
-# 从DASMatrix.config导入配置类
+logger = logging.getLogger(__name__)
 
 
 class DataType(Enum):
-    """数据类型枚举类"""
+    """数据类型枚举类 (向后兼容)"""
 
-    DAT = auto()  # DAT文件格式
-    H5 = auto()  # HDF5文件格式
-    SEGY = auto()  # SEG-Y地震数据格式
-    MINISEED = auto()  # MiniSEED地震数据格式
+    DAT = auto()
+    H5 = auto()
+    SEGY = auto()
+    MINISEED = auto()
 
 
 class DataReader(ABC):
-    """抽象数据读取器基类"""
+    """抽象数据读取器基类 (向后兼容)"""
 
     def __init__(self, sampling_config: SamplingConfig):
         """初始化数据读取器
 
         Args:
-            sampling_config: 采样配置对象，包含采样频率、通道数等信息
+            sampling_config: 采样配置对象, 包含采样频率、通道数等信息
         """
         self.sampling_config = sampling_config
         self.logger = logging.getLogger(__name__)
@@ -44,7 +58,7 @@ class DataReader(ABC):
 
         Args:
             file_path: 数据文件路径
-            target_col: 目标列索引列表，如 [21,22,249,251]，指定要处理的非连续列
+            target_col: 目标列索引列表
 
         Returns:
             Union[np.ndarray, da.Array]: 读取的原始数据
@@ -52,18 +66,9 @@ class DataReader(ABC):
         pass
 
     def ValidateFile(self, file_path: Path) -> None:
-        """验证文件是否存在且可读
-
-        Args:
-            file_path: 数据文件路径
-
-        Raises:
-            FileNotFoundError: 文件不存在
-            PermissionError: 无法读取文件
-        """
+        """验证文件是否存在且可读"""
         if not isinstance(file_path, Path):
             file_path = Path(file_path)
-            self.logger.debug(f"将文件路径转换为 Path 对象: {file_path}")
 
         if not file_path.exists():
             raise FileNotFoundError(f"文件不存在: {file_path}")
@@ -76,238 +81,138 @@ class DataReader(ABC):
 
 
 class DATReader(DataReader):
-    """DAT格式数据读取器"""
+    """DAT 格式数据读取器 (向后兼容)"""
 
     def ReadRawData(
         self, file_path: Path, target_col: Optional[List[int]] = None
     ) -> Union[np.ndarray, "da.Array"]:
-        """读取DAT格式的原始数据
-
-        Args:
-            file_path: 数据文件路径
-            target_col: 目标列索引列表，如 [21,22,249,251]，指定要处理的非连续列
-
-        Returns:
-            np.ndarray: 读取的原始数据
-        """
+        """读取 DAT 格式的原始数据"""
         self.ValidateFile(file_path)
 
-        # 计算行数
         file_info = file_path.stat()
         byte_count = file_info.st_size
         row_count = byte_count // (self.sampling_config.channels * 2)
 
         if row_count <= 0:
-            raise ValueError(f"文件大小异常，无法读取有效数据: {file_path}")
+            raise ValueError(f"文件大小异常, 无法读取有效数据: {file_path}")
 
-        # 根据byte_order指定字节序
         dtype = ">i2" if self.sampling_config.byte_order == "big" else "<i2"
 
-        # 如果是 lazy 模式 (chunks 不是 None)
-        chunks = getattr(self.sampling_config, "chunks", None)  # 假设 config 有 chunks
-        # 或者增加参数 lazy=False
-
-        # 统一策略：默认 lazy 如果文件很大？或者总是 lazy，用户可以 compute()
-        # 为了兼容性，我们可以让 ReadRawData 返回 da.Array，它是 np.ndarray 的鸭子类型
-        # 但是旧代码可能期待 pure numpy
-
-        # 这里我们修改为：使用 memmap + dask
         try:
-            # Memory map the file
-            mmap_mode = "r"
-            raw_data_mmap = np.memmap(
+            mmap = np.memmap(
                 str(file_path),
                 dtype=dtype,
-                mode=mmap_mode,
+                mode="r",
                 shape=(int(row_count), int(self.sampling_config.channels)),
-            )  # type: ignore
+            )
 
-            # Wrap with dask array
-            # Chunking strategy:
-            # If chunks not specified, default to auto or specific size
-            # Typically DAS data is time-heavy.
-            # Let's chunk by time (e.g. 10000 samples) and full channels?
-            # Or use 'auto'
-            chunks = "auto"
+            data = da.from_array(mmap, chunks="auto")
+            data = (data * np.pi) / 2**13
 
-            dask_data = da.from_array(raw_data_mmap, chunks=chunks)
-
-            # Convert to physical units dealing with dask graph
-            # This is lazy
-            data = (dask_data * np.pi) / 2**13
-
-            # Slicing columns (channels) is also lazy and efficient in dask
             if target_col is not None:
                 data = data[:, target_col]
-
-            # For backward compatibility, if caller expects numpy,
-            # they might be surprised. But the task is "Refactor
-            # DASReader to support lazy loading".
-            # We should probably return dask array.
-            # However, existing tests expect numpy shape immediately.
-            # Dask array has shape. Operations will be lazy.
-
-            # Wait, if we return dask array, existing code doing
-            # things like `data[0]` works.
-            # But `type(data)` is `dask.array.core.Array`.
-            # Let's return dask array.
 
             return data
 
         except Exception as e:
-            self.logger.error(f"读取DAT文件时发生错误: {e}")
-            raise IOError(f"无法读取DAT文件: {file_path}") from e
-        except Exception as e:
-            self.logger.error(f"读取DAT文件时发生错误: {e}")
-            raise IOError(f"无法读取DAT文件: {file_path}") from e
+            self.logger.error(f"读取 DAT 文件时发生错误: {e}")
+            raise IOError(f"无法读取 DAT 文件: {file_path}") from e
 
 
 class H5Reader(DataReader):
-    """HDF5格式数据读取器"""
+    """HDF5 格式数据读取器 (向后兼容)"""
 
     def ReadRawData(
         self, file_path: Path, target_col: Optional[List[int]] = None
     ) -> Union[np.ndarray, "da.Array"]:
-        """读取HDF5格式的原始数据
-
-        Args:
-            file_path: 数据文件路径
-            target_col: 目标列索引列表，如 [21,22,249,251]，指定要处理的非连续列
-
-        Returns:
-            np.ndarray: 读取的原始数据
-        """
+        """读取 HDF5 格式的原始数据"""
         self.ValidateFile(file_path)
 
         try:
-            # Open file in read mode. Note: We cannot use 'with' block here if
-            # we want to return lazy array because closing file invalidates
-            # the h5 dataset. Dask handles this if we don't close immediately?
-            # Actually standard practice for lazy h5 in typical scripts is tricky.
-            # But xarray/dask usually keeps file open or reopens.
-            # For dask.from_array(dataset), the file must remain open.
-
-            # Compromise: We behave like xarray.open_dataset.
-            # We attach the file object to the array or reader?
-            # Or we simply don't support context manager closing in strict
-            # sense inside this method. Let's assume user manages
-            # lifecycle or we leave it to GC (h5py does this reasonably).
-
             f = h5py.File(file_path, "r")
             if "Acquisition/Raw[0]" not in f:
                 f.close()
-                raise KeyError("HDF5文件中未找到 'Acquisition/Raw[0]' 数据集")
+                raise KeyError("HDF5 文件中未找到 'Acquisition/Raw[0]' 数据集")
 
             dataset = f["Acquisition/Raw[0]"]
+            data = da.from_array(dataset, chunks="auto")
+            data = (data / 4) * (np.pi / 2**13)
 
-            # Wrap with dask
-            # chunks=None means use h5 chunking if available, else auto?
-            # Safe to specify chunks="auto"
-            dask_data = da.from_array(dataset, chunks="auto")
-
-            # Divide by 4 (lazy)
-            raw_data = dask_data / 4
-
-            # 转换为物理量 (lazy)
-            raw_data = (raw_data * np.pi) / 2**13
-
-            # 如果提供了target_col，只选择指定列 (lazy)
-            if target_col is not None:
-                raw_data = raw_data[:, target_col]
-
-            return raw_data
-        except Exception as e:
-            self.logger.error(f"读取H5文件时发生错误: {e}")
-            raise IOError(f"无法读取H5文件: {file_path}") from e
-
-
-class SEGYReader(DataReader):
-    """SEGY格式数据读取器"""
-
-    def ReadRawData(
-        self, file_path: Path, target_col: Optional[List[int]] = None
-    ) -> Union[np.ndarray, "da.Array"]:
-        """读取SEGY格式的原始数据
-
-        Args:
-            file_path: 数据文件路径
-            target_col: 目标列索引列表
-
-        Returns:
-            np.ndarray: 读取的原始数据 (n_samples, n_channels)
-        """
-        self.ValidateFile(file_path)
-
-        try:
-            # 读取SEGY文件
-            # unpack_trace_headers=True 可以读取头部信息，但会增加内存消耗
-            # headonly=True 只读取头部用于校验，这里我们需要数据
-            st = obspy.read(str(file_path), format="SEGY")
-
-            # 将Stream转换为numpy数组
-            # ObsPy的习惯是 (n_traces, n_samples)
-            # 我们需要转置为 (n_samples, n_channels)
-            # stack=True 确保所有trace长度一致并堆叠成二维数组
-            data = np.stack([tr.data for tr in st], axis=1)
-
-            # 如果提供了target_col，只选择指定列
             if target_col is not None:
                 data = data[:, target_col]
 
             return data
+
         except Exception as e:
-            self.logger.error(f"读取SEGY文件时发生错误: {e}")
-            raise IOError(f"无法读取SEGY文件: {file_path}") from e
+            self.logger.error(f"读取 H5 文件时发生错误: {e}")
+            raise IOError(f"无法读取 H5 文件: {file_path}") from e
 
 
-class MiniSEEDReader(DataReader):
-    """MiniSEED格式数据读取器"""
+class SEGYReader(DataReader):
+    """SEGY 格式数据读取器 (向后兼容)"""
 
     def ReadRawData(
         self, file_path: Path, target_col: Optional[List[int]] = None
     ) -> Union[np.ndarray, "da.Array"]:
-        """读取MiniSEED格式的原始数据
+        """读取 SEGY 格式的原始数据"""
+        self.ValidateFile(file_path)
 
-        Args:
-            file_path: 数据文件路径
-            target_col: 目标列索引列表
+        try:
+            st = obspy.read(str(file_path), format="SEGY")
+            data = np.stack([tr.data for tr in st], axis=1)
 
-        Returns:
-            np.ndarray: 读取的原始数据 (n_samples, n_channels)
-        """
+            if target_col is not None:
+                data = data[:, target_col]
+
+            return data
+
+        except Exception as e:
+            self.logger.error(f"读取 SEGY 文件时发生错误: {e}")
+            raise IOError(f"无法读取 SEGY 文件: {file_path}") from e
+
+
+class MiniSEEDReader(DataReader):
+    """MiniSEED 格式数据读取器 (向后兼容)"""
+
+    def ReadRawData(
+        self, file_path: Path, target_col: Optional[List[int]] = None
+    ) -> Union[np.ndarray, "da.Array"]:
+        """读取 MiniSEED 格式的原始数据"""
         self.ValidateFile(file_path)
 
         try:
             st = obspy.read(str(file_path), format="MSEED")
-
-            # 确保所有trace对齐（MiniSEED可能有间隙）
             st.merge(method=1, fill_value="interpolate")
 
-            # 转换为numpy数组 (n_channels, n_samples) -> (n_samples, n_channels)
-            # 由于MiniSEED不保证所有trace长度绝对一致（除非merge后trim）
             lens = [len(tr) for tr in st]
             if len(set(lens)) > 1:
-                # 裁剪到最小长度
                 min_len = min(lens)
-                self.logger.warning(
-                    f"Trace lengths inconsistent, trimming to {min_len}"
-                )
+                self.logger.warning(f"Trace 长度不一致, 裁剪到 {min_len}")
                 data = np.stack([tr.data[:min_len] for tr in st], axis=1)
             else:
                 data = np.stack([tr.data for tr in st], axis=1)
 
-            # 如果提供了target_col，只选择指定列
             if target_col is not None:
                 data = data[:, target_col]
 
             return data
+
         except Exception as e:
-            self.logger.error(f"读取MiniSEED文件时发生错误: {e}")
-            raise IOError(f"无法读取MiniSEED文件: {file_path}") from e
+            self.logger.error(f"读取 MiniSEED 文件时发生错误: {e}")
+            raise IOError(f"无法读取 MiniSEED 文件: {file_path}") from e
 
 
 class DASReader:
-    """数据读取器类, 用于读取不同格式的数据文件"""
+    """数据读取器类 (向后兼容)
+
+    推荐使用新的 FormatRegistry API:
+        >>> from DASMatrix.acquisition.formats import FormatRegistry
+        >>> data = FormatRegistry.read("data.h5")
+
+    旧的 DASReader API 保持可用:
+        >>> reader = DASReader(config, DataType.H5)
+        >>> data = reader.ReadRawData(file_path)
+    """
 
     def __init__(
         self, sampling_config: SamplingConfig, data_type: DataType = DataType.DAT
@@ -316,24 +221,25 @@ class DASReader:
 
         Args:
             sampling_config: 采样配置对象
-            data_type: 数据类型，默认为DAT格式
+            data_type: 数据类型, 默认为 DAT 格式
         """
         self.sampling_config = sampling_config
-        self.reader: DataReader
         self.data_type = data_type
         self.logger = logging.getLogger(__name__)
 
         # 根据数据类型选择合适的读取器
-        if data_type == DataType.DAT:
-            self.reader = DATReader(sampling_config)
-        elif data_type == DataType.H5:
-            self.reader = H5Reader(sampling_config)
-        elif data_type == DataType.SEGY:
-            self.reader = SEGYReader(sampling_config)
-        elif data_type == DataType.MINISEED:
-            self.reader = MiniSEEDReader(sampling_config)
-        else:
+        reader_map = {
+            DataType.DAT: DATReader,
+            DataType.H5: H5Reader,
+            DataType.SEGY: SEGYReader,
+            DataType.MINISEED: MiniSEEDReader,
+        }
+
+        reader_class = reader_map.get(data_type)
+        if reader_class is None:
             raise ValueError(f"不支持的数据类型: {data_type}")
+
+        self.reader: DataReader = reader_class(sampling_config)
 
     def ReadRawData(
         self, file_path: Path, target_col: Optional[List[int]] = None
@@ -345,12 +251,101 @@ class DASReader:
             target_col: 目标列索引列表
 
         Returns:
-            np.ndarray: 包含原始数据的 NumPy 数组
+            np.ndarray | da.Array: 读取的原始数据
         """
         try:
-            # 读取原始数据
-            raw_data = self.reader.ReadRawData(file_path, target_col)
-            return raw_data
+            return self.reader.ReadRawData(file_path, target_col)
         except Exception as e:
-            self.logger.error(f"读取数据时发生错误: {e}，文件路径: {file_path}")
+            self.logger.error(f"读取数据时发生错误: {e}, 文件路径: {file_path}")
             raise
+
+
+# ============================================================================
+# 新的便捷函数 (推荐使用)
+# ============================================================================
+
+
+def read(
+    path: Union[str, Path],
+    format: Optional[str] = None,
+    **kwargs,
+) -> Union[xr.DataArray, "da.Array", np.ndarray]:
+    """统一读取函数
+
+    自动检测文件格式并读取数据。这是推荐的读取方式。
+
+    Args:
+        path: 文件路径
+        format: 强制指定格式, None 表示自动检测
+        **kwargs: 传递给格式插件的参数
+
+    Returns:
+        da.Array: 读取的数据 (延迟加载)
+
+    Example:
+        >>> from DASMatrix.acquisition import read
+        >>> data = read("data.h5")
+        >>> data = read("data.dat", n_channels=800, sampling_rate=5000)
+    """
+    from .formats import FormatRegistry
+
+    return FormatRegistry.read(path, format_name=format, **kwargs)
+
+
+def scan(
+    path: Union[str, Path],
+    format: Optional[str] = None,
+):
+    """扫描文件元数据
+
+    快速获取文件元数据, 不加载数据。
+
+    Args:
+        path: 文件路径
+        format: 强制指定格式, None 表示自动检测
+
+    Returns:
+        FormatMetadata: 文件元数据
+
+    Example:
+        >>> from DASMatrix.acquisition import scan
+        >>> meta = scan("data.h5")
+        >>> print(f"采样率: {meta.sampling_rate} Hz")
+    """
+    from .formats import FormatRegistry
+
+    return FormatRegistry.scan(path, format_name=format)
+
+
+def detect_format(path: Union[str, Path]) -> Optional[str]:
+    """检测文件格式
+
+    Args:
+        path: 文件路径
+
+    Returns:
+        str | None: 格式名称, 未知格式返回 None
+
+    Example:
+        >>> from DASMatrix.acquisition import detect_format
+        >>> fmt = detect_format("data.h5")
+        >>> print(f"格式: {fmt}")  # 输出: 格式: H5
+    """
+    from .formats import FormatRegistry
+
+    return FormatRegistry.detect_format(path)
+
+
+def list_formats() -> list[str]:
+    """列出所有支持的格式
+
+    Returns:
+        list[str]: 格式名称列表
+
+    Example:
+        >>> from DASMatrix.acquisition import list_formats
+        >>> print(list_formats())  # ['DAT', 'H5', 'SEGY', 'MINISEED']
+    """
+    from .formats import FormatRegistry
+
+    return FormatRegistry.list_formats()
