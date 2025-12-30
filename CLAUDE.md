@@ -85,6 +85,41 @@ just docs-serve
 just docs-deploy
 ```
 
+### CI/CD Pipeline
+
+The project uses GitHub Actions with optimized workflows:
+
+#### Automated Workflows
+- **CI (`ci.yml`)**: Runs on push/PR with parallel jobs:
+  - Code quality: lint, format, type check
+  - Multi-platform testing: Python 3.9-3.12 on Ubuntu/Windows/macOS
+  - Security scanning: safety, bandit
+  - Integration testing: examples validation
+  - Package building with artifact upload
+
+- **Documentation (`docs.yml`)**: Auto-deploys to GitHub Pages on main branch
+- **Release (`release.yml`)**: Automated PyPI publishing on version tags
+- **Benchmarks (`benchmark.yml`)**: Weekly performance monitoring
+
+#### Key Features
+- **Concurrency control**: Cancels redundant runs automatically
+- **Smart caching**: Uses uv dependency caching for faster builds
+- **Coverage reporting**: Integrated with Codecov
+- **Security scanning**: Continuous vulnerability assessment
+- **Multi-platform support**: Ensures compatibility across OS
+
+#### Manual Triggers
+```bash
+# Simulate CI locally
+just check-all
+
+# Test examples before CI
+for example in examples/*.py; do uv run python "$example"; done
+
+# Build documentation locally
+just docs
+```
+
 ## Code Architecture
 
 ### Core Data Processing Pipeline
