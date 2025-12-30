@@ -3,17 +3,18 @@ repos:
     # Ruff version.
     rev: v0.8.0
     hooks:
-      # Run the linter.
+      # Run the linter with fixes on commit (fast)
       - id: ruff
         args: [--fix]
-      # Run the formatter.
+      # Run the formatter on commit (fast)
       - id: ruff-format
 
   - repo: local
     hooks:
-      - id: check-all
-        name: check-all
-        entry: just check-all
+      # Quick validation on push (no fixes, just check)
+      - id: quick-check
+        name: quick-check
+        entry: just quick-check
         language: system
         stages: [pre-push]
         pass_filenames: false
