@@ -51,17 +51,17 @@ class ProcessingConfig:
     wn: float = 0.1
     byte_order: str = "little"
 
-    # 分析范围 (0-indexed input, converted to 0-indexed internally)
+    # 分析范围 (0-indexed, inclusive on both ends)
     start_ch: int = 0
-    end_ch: int = 45
+    end_ch: int = 45  # Channels 0-45 (46 channels total)
 
     # STFT 参数
     window_size: int = 2048
     hop: int = 256
 
     # I/O 配置
-    data_dir: Path = Path("/Users/qianlong/Downloads/test/test")
-    output_root: Path = Path("./plots/batch_analysis_V4")
+    data_dir: Path = Path("/Users/qianlong/Downloads/data2/data")
+    output_root: Path = Path("./plots/batch_analysis_1231")
 
     # 性能配置
     dpi: int = 100
@@ -70,7 +70,9 @@ class ProcessingConfig:
 
     @property
     def output_cols(self):
-        return (self.start_ch - 1, self.end_ch)
+        # Convert inclusive end_ch to exclusive slice end (end_ch + 1)
+        # e.g., start_ch=0, end_ch=45 -> slice [0:46] includes channels 0-45
+        return (self.start_ch, self.end_ch + 1)
 
 
 # 全局配置实例
@@ -306,7 +308,7 @@ def plot_rms_distribution(
     """绘制多通道 RMS 分布图 - 使用预计算的 RMS 值"""
     start_ch = CFG.start_ch
     end_ch = CFG.end_ch
-    channel_numbers = list(range(start_ch, end_ch + 1))
+    channel_numbers = np.arange(start_ch, end_ch + 1)  # Array [0, 1, 2, ..., 45]
 
     fig, ax = plt.subplots(figsize=(12, 4), layout="constrained")
     ax.bar(channel_numbers, rms_values, color="#3498db", alpha=0.8)
@@ -347,7 +349,10 @@ def process_single_file(dat_path: Path) -> tuple[str, bool, str]:
         sft = WORKER_CTX["sft"]
 
         file_label = dat_path.stem
-        time_stamp = file_label.split("_")[-1].replace("(0)", "")
+        # time_stamp = file_label.split("_")[-1].replace("(0)", "")
+        # 解析新格式文件名: "20251231_151243.dat"
+        # 格式: YYYYMMDD_HHMMSS
+        time_stamp = file_label  # 直接使用完整的 stem 作为时间戳
         output_dir = CFG.output_root / time_stamp
 
         # 跳过已存在的
