@@ -4,8 +4,34 @@ from typing import List
 
 import numba
 import numpy as np
+from scipy import signal
 
 from ...core.computation_graph import FusionNode
+
+
+@numba.njit(fastmath=True)
+def sos_filter_sample(val, sos, zi):
+    # sos: (n_sections, 6)
+    # zi: (n_sections, 2)
+    # Direct Form II Transposed
+    for s in range(sos.shape[0]):
+        b0, b1, b2, a0, a1, a2 = sos[s]
+
+        # In Scipy, a0 is usually 1.0. If not, we should normalize.
+        # But usually sos output from scipy is normalized.
+
+        x = val
+        # y[n] = b0*x[n] + z1[n-1]
+        y = b0 * x + zi[s, 0]
+
+        # z1[n] = b1*x[n] - a1*y[n] + z2[n-1]
+        zi[s, 0] = b1 * x - a1 * y + zi[s, 1]
+
+        # z2[n] = b2*x[n] - a2*y[n]
+        zi[s, 1] = b2 * x - a2 * y
+
+        val = y
+    return val
 
 
 class NumbaBackend:
@@ -53,7 +79,7 @@ class NumbaBackend:
     def _prepare_aux_params(
         self, node: FusionNode, data: np.ndarray
     ) -> List[np.ndarray]:
-        """为需要归约的算子准备参数 (如 mean, trend)。"""
+        """为需要归约的算子准备参数 (如 mean, trend, filter coeffs)。"""
         params = []
         n_samples, n_channels = data.shape
 
@@ -93,6 +119,22 @@ class NumbaBackend:
                 means = np.mean(data, axis=0)
                 params.append(means.astype(data.dtype))
 
+            elif op.operation == "bandpass":
+                # Calculate SOS coefficients
+                low = op.kwargs.get("low")
+                high = op.kwargs.get("high")
+                order = op.kwargs.get("order", 4)
+                fs = op.kwargs.get("fs", 1000.0) # Default to 1000 if not provided
+
+                nyq = 0.5 * fs
+                sos = signal.butter(
+                    order, [low / nyq, high / nyq], btype="band", output="sos"
+                )
+                # SOS shape: (n_sections, 6)
+                # It is global for all channels,
+                # but Numba kernel needs it as an argument
+                params.append(sos.astype(data.dtype))
+
         return params
 
     def _get_kernel_signature(self, node: FusionNode) -> str:
@@ -107,6 +149,8 @@ class NumbaBackend:
 
         # 辅助参数名列表 (在 kernel 签名中使用)
         aux_arg_names = []
+
+        pre_loop_code = [] # Code to execute before inner loop (inside j loop)
 
         for op in node.fused_nodes:
             if op.operation == "detrend":
@@ -133,24 +177,36 @@ class NumbaBackend:
                 ops_code.append(f"val = val * {factor}")
 
             elif op.operation == "bandpass":
-                # Placeholder: Pass-through
-                # TODO: Implement IIR/FIR filter state or sosfilt
-                pass
+                sos_name = f"aux_{aux_idx}"
+                aux_arg_names.extend([sos_name])
+                aux_idx += 1
 
-            # TODO: Add filter support (requires stateful loop or simple FIR/IIR)
+                # Setup state variable for this channel
+                zi_name = f"zi_{aux_idx}"
+                # Get n_sections from sos shape at runtime or assuming fixed?
+                # We can use sos_name.shape[0]
+                pre_loop_code.append(
+                    f"{zi_name} = np.zeros(({sos_name}.shape[0], 2), dtype=inp.dtype)"
+                )
+
+                # Apply filter
+                ops_code.append(f"val = sos_filter_sample(val, {sos_name}, {zi_name})")
 
         kernel_body = "\n            ".join(ops_code)
+        pre_loop_body = "\n            ".join(pre_loop_code)
 
         # 构建函数签名
         base_args = ["inp", "out"]
         all_args = base_args + aux_arg_names
         args_str = ", ".join(all_args)
 
+        # Swapped loops: Parallel over cols (channels), Serial over rows (time)
         code = f"""
 def fused_kernel({args_str}):
     rows, cols = inp.shape
-    for i in prange(rows):
-        for j in range(cols):
+    for j in prange(cols):
+        {pre_loop_body}
+        for i in range(rows):
             val = inp[i, j]
             {kernel_body}
             out[i, j] = val
@@ -160,6 +216,8 @@ def fused_kernel({args_str}):
             "numba": numba,
             "prange": numba.prange,
             "abs": abs,
+            "np": np,
+            "sos_filter_sample": sos_filter_sample
         }
 
         exec(code, global_scope)
