@@ -1,11 +1,9 @@
 """Test Numba implementation of bandpass filter."""
 
 import numpy as np
-import pytest
 from scipy import signal
 
 from DASMatrix.core.computation_graph import (
-    ComputationGraph,
     FusionNode,
     OperationNode,
     SourceNode,
@@ -59,7 +57,8 @@ class TestNumbaBandpass:
 
         # Comparison
         # Since we use float64, precision should be high.
-        # sosfilt might have slight numerical differences due to implementation details or order,
+        # sosfilt might have slight numerical differences
+        # due to implementation details or order,
         # but Numba implementation follows standard DF-II Transposed logic.
 
         np.testing.assert_allclose(
@@ -100,7 +99,11 @@ class TestNumbaBandpass:
         # Numba Calculation
         source = SourceNode(data)
         op1 = OperationNode("detrend", [source])
-        op2 = OperationNode("bandpass", [op1], kwargs={"low": 5.0, "high": 50.0, "order": 4, "fs": fs})
+        op2 = OperationNode(
+            "bandpass",
+            [op1],
+            kwargs={"low": 5.0, "high": 50.0, "order": 4, "fs": fs},
+        )
         op3 = OperationNode("abs", [op2])
 
         fusion_node = FusionNode([op1, op2, op3])

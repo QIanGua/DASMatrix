@@ -131,7 +131,8 @@ class NumbaBackend:
                     order, [low / nyq, high / nyq], btype="band", output="sos"
                 )
                 # SOS shape: (n_sections, 6)
-                # It is global for all channels, but Numba kernel needs it as an argument
+                # It is global for all channels,
+                # but Numba kernel needs it as an argument
                 params.append(sos.astype(data.dtype))
 
         return params
@@ -184,7 +185,9 @@ class NumbaBackend:
                 zi_name = f"zi_{aux_idx}"
                 # Get n_sections from sos shape at runtime or assuming fixed?
                 # We can use sos_name.shape[0]
-                pre_loop_code.append(f"{zi_name} = np.zeros(({sos_name}.shape[0], 2), dtype=inp.dtype)")
+                pre_loop_code.append(
+                    f"{zi_name} = np.zeros(({sos_name}.shape[0], 2), dtype=inp.dtype)"
+                )
 
                 # Apply filter
                 ops_code.append(f"val = sos_filter_sample(val, {sos_name}, {zi_name})")
