@@ -114,7 +114,8 @@ def demo_tool_execution():
     print(f"   检测到事件数: {events['events_detected']}")
     for i, event in enumerate(events["events"][:3]):
         print(
-            f"   事件 {i+1}: {event['start_time_s']:.3f}s - {event['end_time_s']:.3f}s ({event['duration_ms']:.1f}ms)"
+            f"   事件 {i+1}: {event['start_time_s']:.3f}s - {event['end_time_s']:.3f}s "
+            f"({event['duration_ms']:.1f}ms)"
         )
 
     # 6. 可视化
@@ -156,7 +157,8 @@ def demo_simulated_agent_conversation():
     print(f"\n📚 已注册 {len(tool_schemas)} 个工具:")
     for schema in tool_schemas:
         print(
-            f"   - {schema['function']['name']}: {schema['function']['description'][:50]}..."
+            f"   - {schema['function']['name']}: "
+            f"{schema['function']['description'][:50]}..."
         )
 
     # 模拟用户对话
@@ -205,15 +207,34 @@ def demo_simulated_agent_conversation():
         print(f"👤 用户: {conv['user']}")
 
         # 替换 DATA_ID 占位符
+        # 替换 DATA_ID 占位符
         tool_call = conv["tool_call"]
-        args = tool_call["arguments"].copy()
-        if "data_id" in args and args["data_id"] == "<DATA_ID>":
-            args["data_id"] = data_id
+        if (
+            not isinstance(tool_call, dict)
+            or "arguments" not in tool_call
+            or "name" not in tool_call
+        ):
+            continue
+
+        args = tool_call["arguments"]
+        if isinstance(args, dict):
+            args = args.copy()
+            if "data_id" in args and args["data_id"] == "<DATA_ID>":
+                args["data_id"] = data_id
 
         # 执行工具调用
         tool_name = tool_call["name"]
+        if not isinstance(tool_name, str):
+            continue
+
+        if not hasattr(tools, tool_name):
+            continue
+
         method = getattr(tools, tool_name)
-        result = method(**args)
+        if isinstance(args, dict):
+            result = method(**args)
+        else:
+            result = method()
 
         # 保存 data_id 供后续使用
         if "id" in result and tool_name == "read_das_data":
@@ -223,22 +244,25 @@ def demo_simulated_agent_conversation():
         print(f"   参数: {json.dumps(args, ensure_ascii=False)}")
         print(f"   结果: {json.dumps(result, indent=2, ensure_ascii=False)[:200]}...")
 
-        # 模拟 Agent 回复
         if tool_name == "read_das_data":
             print(
-                f"🤖 Agent: 已成功读取数据，共 {result['n_channels']} 个通道，时长 {result['duration']:.1f} 秒。"
+                f"🤖 Agent: 已成功读取数据，共 {result['n_channels']} 个通道，"
+                f"时长 {result['duration']:.1f} 秒。"
             )
         elif tool_name == "process_signal":
             print(
-                f"🤖 Agent: 已完成滤波处理，应用了 {result['operations_applied']} 个操作。"
+                f"🤖 Agent: 已完成滤波处理，"
+                f"应用了 {result['operations_applied']} 个操作。"
             )
         elif tool_name == "compute_spectrum":
             print(
-                f"🤖 Agent: 频谱分析完成，主导频率为 {result['dominant_frequency_hz']:.1f} Hz。"
+                f"🤖 Agent: 频谱分析完成，主导频率为 "
+                f"{result['dominant_frequency_hz']:.1f} Hz。"
             )
         elif tool_name == "create_visualization":
             print(
-                f"🤖 Agent: 已生成{result['plot_type']}图，保存在 {result['output_path']}"
+                f"🤖 Agent: 已生成{result['plot_type']}图，"
+                f"保存在 {result['output_path']}"
             )
 
         print()

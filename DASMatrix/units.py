@@ -16,37 +16,38 @@ import pint
 
 # 创建全局单位注册表
 ureg = pint.UnitRegistry()
+UnitRegistry = pint.UnitRegistry
 Quantity = ureg.Quantity
 
 # === 常用长度单位 ===
-m = ureg.meter
-km = ureg.kilometer
-mm = ureg.millimeter
-um = ureg.micrometer
-nm = ureg.nanometer
-ft = ureg.foot
+m: pint.Unit = ureg.meter
+km: pint.Unit = ureg.kilometer
+mm: pint.Unit = ureg.millimeter
+um: pint.Unit = ureg.micrometer
+nm: pint.Unit = ureg.nanometer
+ft: pint.Unit = ureg.foot
 
 # === 常用时间单位 ===
-s = ureg.second
-ms = ureg.millisecond
-us = ureg.microsecond
-ns = ureg.nanosecond
-minute = ureg.minute
-hour = ureg.hour
+s: pint.Unit = ureg.second
+ms: pint.Unit = ureg.millisecond
+us: pint.Unit = ureg.microsecond
+ns: pint.Unit = ureg.nanosecond
+minute: pint.Unit = ureg.minute
+hour: pint.Unit = ureg.hour
 
 # === 常用频率单位 ===
-Hz = ureg.hertz
-kHz = ureg.kilohertz
-MHz = ureg.megahertz
+Hz: pint.Unit = ureg.hertz
+kHz: pint.Unit = ureg.kilohertz
+MHz: pint.Unit = ureg.megahertz
 
 # === DAS 特定单位 ===
 # 应变率 (strain rate)
-strain = ureg.dimensionless
-strain_rate = ureg.dimensionless / ureg.second
+strain: pint.Unit = ureg.dimensionless
+strain_rate: pint.Quantity = ureg.dimensionless / ureg.second
 
 # === 速度单位 ===
-m_per_s = ureg.meter / ureg.second
-km_per_s = ureg.kilometer / ureg.second
+m_per_s: pint.Quantity = ureg.meter / ureg.second
+km_per_s: pint.Quantity = ureg.kilometer / ureg.second
 
 
 def get_quantity(expr: str) -> pint.Quantity:
@@ -154,4 +155,5 @@ __all__ = [
     "get_unit",
     "to_base_units",
     "magnitude",
+    "UnitRegistry",
 ]

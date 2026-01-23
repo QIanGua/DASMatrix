@@ -194,7 +194,7 @@ class TestCustomPlugin:
                     format_name=self.format_name,
                 )
 
-            def read(  # type: ignore[override]
+            def read(
                 self,
                 path: Path,
                 channels=None,

@@ -235,7 +235,7 @@ class SpectrumPlot(PlotBase):
         if ax is None:
             fig, ax = plt.subplots(figsize=self.config.figsize_standard)
         else:
-            fig = ax.figure  # type: ignore
+            fig = ax.figure
 
         # 性能优化：提前计算dB值，避免重复计算
         # 幅值通常以 dB 显示
@@ -467,7 +467,7 @@ class WaveformPlot(PlotBase):
         if ax is None:
             fig, ax = plt.subplots(figsize=self.config.figsize_wide)
         else:
-            fig = ax.figure  # type: ignore
+            fig = ax.figure
 
         # 绘制波形 - 直接绘制，无需计算统计信息
         # 性能优化：使用更高效的线条渲染，减少中间计算
@@ -618,7 +618,7 @@ class SpectrogramPlot(PlotBase):
         if ax is None:
             fig, ax = plt.subplots(figsize=self.config.figsize_standard)
         else:
-            fig = ax.figure  # type: ignore
+            fig = ax.figure
 
         # 计算窗口重叠点数
         noverlap = int(window_size * overlap)
@@ -760,7 +760,7 @@ class WaterfallPlot(PlotBase):
         if ax is None:
             fig, ax = plt.subplots(figsize=self.config.figsize_wide)
         else:
-            fig = ax.figure  # type: ignore
+            fig = ax.figure
 
         # 确定数据显示范围
         if value_range is None:
@@ -1335,7 +1335,7 @@ class FKPlot(PlotBase):
         if ax is None:
             fig, ax = plt.subplots(figsize=self.config.figsize_standard)
         else:
-            fig = ax.figure  # type: ignore
+            fig = ax.figure
 
         # 计算幅度谱 (dB)
         mag = np.abs(fk_spectrum)

@@ -24,7 +24,9 @@ def test_inventory_creation():
         interrogator=Interrogator(model="Test Unit", sampling_rate=1000.0),
     )
     assert inv.project_name == "Test Project"
+    assert inv.acquisition is not None
     assert inv.acquisition.n_channels == 100
+    assert inv.fiber is not None
     assert inv.fiber.gauge_length == 10.0
 
 
