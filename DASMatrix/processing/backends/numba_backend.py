@@ -56,25 +56,24 @@ class NumbaBackend:
         # 检查是否需要统计信息
         needs_detrend = any(op.operation == "detrend" for op in node.fused_nodes)
         needs_demean = any(op.operation == "demean" for op in node.fused_nodes)
+        needs_normalize = any(op.operation == "normalize" for op in node.fused_nodes)
 
-        if needs_detrend or needs_demean:
+        if needs_detrend or needs_demean or needs_normalize:
             # 调用高性能 JIT 辅助函数
-            return self._compute_stats_numba(data, needs_detrend, needs_demean)
+            return self._compute_stats_numba(data, needs_detrend, needs_demean, needs_normalize)
 
         return params
 
     @staticmethod
     @numba.njit(parallel=True, fastmath=True)
-    def _compute_stats_numba(data, compute_detrend: bool, compute_demean: bool):
+    def _compute_stats_numba(data, compute_detrend: bool, compute_demean: bool, compute_normalize: bool):
         n_samples, n_channels = data.shape
         dtype = data.dtype
 
         results = []
 
         if compute_detrend:
-            # 一次遍历计算 sum_y 和 sum_xy
-            # x = [0, 1, 2, ..., n-1]
-            # sum_x = n(n-1)/2, sum_x2 = n(n-1)(2n-1)/6
+            # Linear regression stats
             n = n_samples
             sum_x = n * (n - 1) / 2
             sum_x2 = n * (n - 1) * (2 * n - 1) / 6
@@ -98,6 +97,28 @@ class NumbaBackend:
 
             results.append(ks)
             results.append(bs)
+
+        if compute_normalize:
+            # Z-score needs mean and std
+            means = np.zeros(n_channels, dtype=dtype)
+            stds = np.zeros(n_channels, dtype=dtype)
+            for j in numba.prange(n_channels):  # type: ignore
+                # Welford algorithm for single-pass mean/std
+                m = 0.0
+                m2 = 0.0
+                for i in range(n_samples):
+                    val = data[i, j]
+                    delta = val - m
+                    m += delta / (i + 1)
+                    delta2 = val - m
+                    m2 += delta * delta2
+
+                means[j] = m
+                variance = m2 / n_samples
+                stds[j] = np.sqrt(variance) if variance > 0 else 1.0
+
+            results.append(means)
+            results.append(stds)
 
         elif compute_demean:
             means = np.zeros(n_channels, dtype=dtype)
@@ -151,6 +172,14 @@ class NumbaBackend:
                 # Placeholder: Pass-through
                 # TODO: Implement IIR/FIR filter state or sosfilt
                 pass
+
+            elif op.operation == "normalize":
+                # Assume z-score normalization (uses mean and std from aux)
+                m_name = f"aux_{aux_idx}"
+                s_name = f"aux_{aux_idx + 1}"
+                aux_arg_names.extend([m_name, s_name])
+                aux_idx += 2
+                ops_code.append(f"val = (val - {m_name}[j]) / {s_name}[j]")
 
             # TODO: Add filter support (requires stateful loop or simple FIR/IIR)
 

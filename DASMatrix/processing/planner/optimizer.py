@@ -18,7 +18,6 @@ NON_FUSIBLE_OPS: Set[str] = {
     "stft",
     "hilbert",
     "envelope",
-    "normalize",
     # 滤波器操作 (需要 SciPy)
     "bandpass",
     "lowpass",
@@ -33,6 +32,7 @@ FUSIBLE_OPS: Set[str] = {
     "demean",
     "abs",
     "scale",
+    "normalize",
 }
 
 

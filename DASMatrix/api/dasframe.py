@@ -127,7 +127,6 @@ class DASFrame:
 
         Uses dask map_blocks. We ensure time is the core dimension.
         """
-        from scipy import signal
 
         def _filter_func(block, fs, low, high, order):
             # block will have shape (..., time) because time is the core dim
@@ -152,7 +151,6 @@ class DASFrame:
 
     def lowpass(self, cutoff: float, order: int = 4) -> "DASFrame":
         """Apply lowpass filter."""
-        from scipy import signal
 
         def _filter_func(block, fs, cutoff, order):
             nyq = 0.5 * fs
@@ -172,7 +170,6 @@ class DASFrame:
 
     def highpass(self, cutoff: float, order: int = 4) -> "DASFrame":
         """Apply highpass filter."""
-        from scipy import signal
 
         def _filter_func(block, fs, cutoff, order):
             nyq = 0.5 * fs
@@ -192,7 +189,6 @@ class DASFrame:
 
     def notch(self, freq: float, Q: float = 30) -> "DASFrame":
         """陷波滤波器，移除特定频率成分。"""
-        from scipy import signal
 
         def _filter_func(block, fs, freq, Q):
             b, a = signal.iirnotch(freq, Q, fs)
@@ -211,7 +207,6 @@ class DASFrame:
 
     def detrend(self, axis: str = "time") -> "DASFrame":
         """Detrend data."""
-        from scipy import signal
 
         def _detrend_func(data):
             return signal.detrend(data, axis=-1)
@@ -293,18 +288,21 @@ class DASFrame:
             return np.sqrt(rolling_mean.compute().values)
 
     def fft(self) -> "DASFrame":
-        """快速傅立叶变换 (Real FFT)，返回单边幅度谱。"""
+        """快速傅立叶变换 (Real FFT)，返回单边幅度谱。
+
+        基于 Dask 延迟计算。注意：FFT 仍需在内存中持有完整的变换轴。
+        """
 
         def _fft_func(data):
+            # apply_ufunc moves core dim (time) to last axis
             return np.abs(np.fft.rfft(data, axis=-1))
 
-        data = self._data.chunk({"time": -1})
-        n_samples = data.sizes["time"]
+        n_samples = self._data.sizes["time"]
         freqs = np.fft.rfftfreq(n_samples, 1 / self._fs)
 
         spectrum = xr.apply_ufunc(
             _fft_func,
-            data,
+            self._data,
             input_core_dims=[["time"]],
             output_core_dims=[["frequency"]],
             dask="parallelized",
@@ -313,11 +311,9 @@ class DASFrame:
         )
 
         spectrum = spectrum.assign_coords(frequency=freqs)
-        # apply_ufunc moves core dims to the end, result is (distance, frequency)
-        # transpose back to (frequency, distance) to match convention
-        spectrum = spectrum.transpose("frequency", ...)
+        # transpose back to (frequency, distance)
+        spectrum = spectrum.transpose("frequency", "distance")
 
-        # 注意：FFT 变换后，'time' 轴变成了 'frequency' 轴，fs 含义也变化了
         return DASFrame(spectrum, self._fs, self._dx, **self._metadata)
 
     def hilbert(self) -> "DASFrame":
@@ -326,10 +322,9 @@ class DASFrame:
         def _hilbert_func(data):
             return signal.hilbert(data, axis=-1)
 
-        data = self._data.chunk({"time": -1})
         analytical = xr.apply_ufunc(
             _hilbert_func,
-            data,
+            self._data,
             input_core_dims=[["time"]],
             output_core_dims=[["time"]],
             dask="parallelized",
@@ -424,16 +419,33 @@ class DASFrame:
         self,
         v_min: Optional[float] = None,
         v_max: Optional[float] = None,
-        dx: float = 1.0,
+        dx: Optional[float] = None,
     ) -> "DASFrame":
-        """F-K 滤波 (速度滤波)。"""
-        data = self.collect()
+        """F-K 滤波 (速度滤波)。
+
+        现在基于 Dask 延迟计算，支持大规模数据集。
+        """
         from ..config.sampling_config import SamplingConfig
         from ..processing.das_processor import DASProcessor
 
-        config = SamplingConfig(fs=self._fs, channels=data.shape[1])
-        processor = DASProcessor(config)
-        filtered = processor.FKFilter(data, v_min=v_min, v_max=v_max, dx=dx)
+        if dx is None:
+            dx = self._dx
+
+        def _fk_func(block, fs, v_min, v_max, dx):
+            # block shape (time, distance)
+            config = SamplingConfig(fs=fs, channels=block.shape[1])
+            processor = DASProcessor(config)
+            return processor.FKFilter(block, v_min=v_min, v_max=v_max, dx=dx)
+
+        filtered = xr.apply_ufunc(
+            _fk_func,
+            self._data,
+            kwargs={"fs": self._fs, "v_min": v_min, "v_max": v_max, "dx": dx},
+            input_core_dims=[["time", "distance"]],
+            output_core_dims=[["time", "distance"]],
+            dask="parallelized",
+            output_dtypes=[self._data.dtype],
+        )
         return DASFrame(filtered, self._fs, dx, **self._metadata)
 
     # --- 检测 (Detection) ---
@@ -451,10 +463,22 @@ class DASFrame:
         ch: Optional[int] = None,
         title: str = "Time Series",
         ax: Optional[plt.Axes] = None,
+        max_samples: int = 5000,
         **kwargs,
     ) -> plt.Figure:
-        """绘制时间序列。"""
-        data = self.collect()
+        """绘制时间序列。具有自动降采样保护。"""
+        if ch is None:
+            # Take first few channels if not specified
+            frame = self.slice(x=slice(0, min(5, self.shape[1])))
+        else:
+            frame = self.slice(x=slice(ch, ch + 1))
+
+        nt = frame.shape[0]
+        if nt > max_samples:
+            step = int(np.ceil(nt / max_samples))
+            frame = frame.slice(t=slice(0, nt, step))
+
+        data = frame.collect()
 
         if ax is None:
             fig, ax = plt.subplots(figsize=(10, 4))
@@ -463,11 +487,11 @@ class DASFrame:
                 raise ValueError("Provided ax must belong to a figure")
             fig = cast(plt.Figure, ax.figure)
 
-        t = self._data.time.values
+        t = frame._data.time.values
         if ch is None:
-            ax.plot(t, data[:, : min(5, data.shape[1])], alpha=0.7)
+            ax.plot(t, data, alpha=0.7, **kwargs)
         else:
-            ax.plot(t, data[:, ch])
+            ax.plot(t, data[:, 0], **kwargs)
 
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
@@ -490,7 +514,6 @@ class DASFrame:
 
         plotter = SpectrumPlot()
         # 计算频谱 (Welch 方法)
-        from scipy import signal
 
         n = len(ch_data)
         nperseg = min(2048, n // 4)
