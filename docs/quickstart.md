@@ -155,6 +155,37 @@ DASMatrix 采用 "Lazy-by-Default" 策略：
   processed.plot_heatmap(max_samples=2000)
   ```
 
+
+### 5. 智能分析：模板匹配 (Template Matching)
+
+针对特定信号（如微震、车辆行驶波形），DASMatrix 提供高性能的归一化互相关 (NCC) 匹配：
+
+```python
+# 定义或提取一个 1D 模板信号
+template_1d = ... 
+# 在所有通道上并行寻找该信号
+matches = frame.template_match(template_1d).collect()
+
+# 也可以进行 2D 时空模板匹配（寻找特定速度传播的波）
+template_2d = ... # (time x distance)
+matches_2d = frame.template_match(template_2d).collect()
+```
+
+### 6. 工业级多文件管理 (DASSpool)
+
+对于海量小文件项目，使用 Spool 进行统一管理：
+
+```python
+# 扫描目录并开启持久化索引缓存
+spool = dm.spool("data/*.h5", cache_path=".cache").update()
+
+# 毫秒级元数据筛选
+subset = spool.select(iu_model="QuantX", ProjectName="DeepWell")
+
+# 虚拟合并为连续 Frame
+long_frame = subset.to_frame()
+```
+
 ## 下一步
 
 - 查看 [API 文档](api/index.md) 了解完整功能

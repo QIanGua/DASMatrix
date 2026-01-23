@@ -1170,10 +1170,10 @@ class TestPerformance:
 
 | 任务 | 优先级 | 负责人 | 目标与技术细节 |
 |------|--------|--------|----------------|
-| **DASInventory 深度集成** | P1 | - | 1. 升级 FormatPlugin 接口以支持全量 Inventory 返回；2. 针对 PRODML/H5 实现元数据自动映射逻辑。 |
+| **DASInventory 深度集成** | P1 | ✅ 已完成 | 1. 升级 FormatPlugin 接口并支持标准化 Inventory；2. 已实现 PRODML/H5 深度映射。 |
 | **Atoms 有状态流水线** | P1 | - | 1. 实现 `processing/atoms.py` 核心抽象；2. 实现 `SosFilt` 有状态滤波，确保分块处理时无边界突变。 |
 | **Ecosystem Interop** | P1 | - | 1. 建立与 ObsPy (Stream/Trace) 的双向转换；2. 支持与 DASCore (Patch) 的互转，打破数据隔离。 |
-| **分析模块 (analysis/)** | P1 | - | 1. 实现经典 STA/LTA 事件检测算法；2. 增加基于 Polars 的高速事件属性查询功能。 |
+| **分析模块 (analysis/)** | P1 | 🚧 增强中 | 1. 已实现 STA/LTA 与高性能 1D/2D 模板匹配；2. 后续增加事件聚类与持久化。 |
 | **GPU (CuPy) 后端融合** | P2 | - | 1. 将 Numba JIT 内核逻辑迁移至 CuPy/CUDA 内核；2. 支持超大规模矩阵的 GPU 加速 FFT。 |
 | **PyPI 正式发布** | P1 | - | 1. 完善文档与教程视频；2. 发布 v0.2.0 稳定版至 PyPI。 |
 
@@ -1248,6 +1248,15 @@ class TestPerformance:
 ### 14.4 [已完成] Numba 单次扫描算子融合
 - **成果**: 归一化与统计速度提升 2x+，深度饱和硬件带宽。
 - **技术**: 内置 Welford 算法实现均值/方差单次遍历计算。
+
+
+### 14.5 [已完成] 工业级数据集持久化与单位转换
+- **成果**: 实现了 DASSpool 的 Parquet/Pickle 双重持久化缓存，支持 TB 级项目秒级初始化。
+- **技术**: 集成了 Pint 单位系统，支持 Phase 到 Strain 的物理量纲全自动标准化转换。
+
+### 14.6 [已完成] 智能信号探测 (Template Matching)
+- **成果**: 实现了 Numba 优化的 1D/2D NCC 模板匹配，支持 TB 级数据的核外并行识别。
+- **技术**: 采用 Dask 分块并行化策略，确保了大规模时空特征探测的内存安全性。
 
 ## 15. 未来演进计划 (M4+)
 
