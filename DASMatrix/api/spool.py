@@ -147,7 +147,11 @@ class DASSpool:
         distance: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> "DASSpool":
-        """延迟筛选子集 (返回新 Spool, 不加载数据)"""
+        """延迟筛选子集 (返回新 Spool, 不加载数据)
+
+        支持通过时间、距离以及 Inventory 中的自定义属性进行过滤。
+        例如: spool.select(iu_model="QuantX")
+        """
         if self._index is None:
             self.update()
 
@@ -155,20 +159,35 @@ class DASSpool:
             return self
 
         new_spool = DASSpool([], format=self._format)
-        # Copy cache
         new_spool._meta_cache = self._meta_cache.copy()
 
         df = self._index.copy()
 
         if time:
             t_start, t_end = pd.to_datetime(time[0]), pd.to_datetime(time[1])
-            # Filter files that overlap with [t_start, t_end]
-            # Handle cases where start_time might be NaT (no time info in file)
-            # If no time info, we might keep them or drop them.
-            # For now, drop rows where time is NaT if filtering by time.
             df = df.dropna(subset=["start_time", "end_time"])
-
             mask = (df["start_time"] < t_end) & (df["end_time"] > t_start)
+            df = df[mask]
+
+        for key, value in kwargs.items():
+
+            def _match(path):
+                meta = self._meta_cache.get(path)
+                if not meta:
+                    return False
+                if key in meta.attrs and meta.attrs[key] == value:
+                    return True
+                inv = meta.inventory
+                if not inv:
+                    return False
+                for sub in [inv.interrogator, inv.fiber, inv.acquisition]:
+                    if sub and hasattr(sub, key) and getattr(sub, key) == value:
+                        return True
+                if key in inv.custom_attrs and inv.custom_attrs[key] == value:
+                    return True
+                return False
+
+            mask = df["path"].apply(_match)
             df = df[mask]
 
         new_spool._index = df

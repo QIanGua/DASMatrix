@@ -81,6 +81,7 @@ class DASDashboard:
         lang: str = "cn",
         config: Optional[VisualizationConfig] = None,
         focus_channel: int = 0,
+        max_display_channels: int = 1000,
     ):
         """初始化高级看板
 
@@ -98,6 +99,7 @@ class DASDashboard:
         self.lang = lang.lower() if lang.lower() in self.I18N else "en"
         self.config = config or VisualizationConfig.for_screen()
         self.focus_channel = focus_channel
+        self.max_display_channels = max_display_channels
         self.logger = logging.getLogger(__name__)
 
         # 配色方案 (Dark Industrial)
@@ -279,8 +281,25 @@ class DASDashboard:
             self.data_buffer = np.roll(self.data_buffer, -n_samples, axis=0).astype(np.float64)
             self.data_buffer[-n_samples:] = chunk
 
+        # 自动降采样保护 (Visualization Decimation)
+        nt, nx = chunk.shape
+        display_chunk = chunk
+        if nx > self.max_display_channels:
+            step_x = int(np.ceil(nx / self.max_display_channels))
+            display_chunk = display_chunk[:, ::step_x]
+
+        # 同样对 buffer 进行降采样显示
+        nt_b, nx_b = self.data_buffer.shape
+        display_buffer = self.data_buffer
+        if nx_b > self.max_display_channels:
+            step_x = int(np.ceil(nx_b / self.max_display_channels))
+            display_buffer = display_buffer[:, ::step_x]
+
         # 1. 更新瀑布图
-        self.im.set_data(self.data_buffer.T)
+        self.im.set_data(display_buffer.T)
+        # 调整 extent 以反映真实的通道范围（即使降采样了）
+        self.im.set_extent((float(-self.buffer_duration), 0.0, 0.0, float(self.n_channels)))
+
         vmax = np.percentile(np.abs(self.data_buffer), 99.5) or 1.0
         self.im.set_clim(-float(vmax), float(vmax))
 

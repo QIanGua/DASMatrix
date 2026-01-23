@@ -106,3 +106,37 @@ class Parallel(Atom):
     def reset(self) -> None:
         for atom in self.atoms:
             atom.reset()
+
+
+class StreamProcessor:
+    """High-level processor for real-time stateful data streams.
+
+    Wraps an Atom (typically a Sequential pipeline) and handles
+    incoming data chunks from a stream source.
+    """
+
+    def __init__(self, pipeline: Atom):
+        """
+        Args:
+            pipeline: The stateful processing pipeline.
+        """
+        self.pipeline = pipeline
+        self.processed_count = 0
+
+    def process_chunk(self, chunk: "DASFrame") -> "DASFrame":
+        """Process a single data chunk while maintaining state.
+
+        Args:
+            chunk: The incoming data chunk.
+
+        Returns:
+            The processed DASFrame.
+        """
+        result = self.pipeline(chunk)
+        self.processed_count += 1
+        return result
+
+    def reset(self) -> None:
+        """Reset the pipeline state."""
+        self.pipeline.reset()
+        self.processed_count = 0
