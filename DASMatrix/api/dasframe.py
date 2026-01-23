@@ -1,6 +1,6 @@
 import builtins
 import warnings
-from typing import Any, List, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union, cast
 
 import dask.array as da
 import matplotlib.pyplot as plt
@@ -11,6 +11,9 @@ from matplotlib.figure import Figure
 from scipy import signal
 
 from ..core.inventory import DASInventory
+
+if TYPE_CHECKING:
+    from ..core.event import EventCatalog
 
 
 class DASFrame:
@@ -452,6 +455,89 @@ class DASFrame:
 
         return DASFrame(ratio, self._fs, self._dx, **self._metadata)
 
+    def trigger_detection(self, threshold: float, trigger_off: Optional[float] = None) -> "EventCatalog":
+        """基于阈值检测事件并返回 EventCatalog。
+
+        Args:
+            threshold: 触发阈值。
+            trigger_off: 结束阈值 (默认为 threshold)。
+
+        Returns:
+            EventCatalog: 包含检测到的事件列表。
+        """
+        from datetime import datetime, timedelta
+
+        from ..core.event import DASEvent, EventCatalog
+
+        if trigger_off is None:
+            trigger_off = threshold
+
+        # 1. 获取检测掩码 (Lazy)
+        mask = self.abs().collect() > threshold
+
+        # 2. 简单的连通域分析或逐通道触发
+        # 为了性能，这里先实现简单的逐通道触发逻辑
+        # TODO: 使用 skimage.measure.label 进行 2D 连通域标记以支持时空事件
+
+        events = []
+        nt, nx = mask.shape
+        t_coords = self._data.time.values
+
+        # 获取绝对开始时间
+        base_time = datetime.now()
+        inv = self.inventory
+        if inv and inv.acquisition and inv.acquisition.start_time:
+            # Handle potential string or datetime
+            st = inv.acquisition.start_time
+            if isinstance(st, str):
+                try:
+                    base_time = datetime.fromisoformat(st.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+            elif isinstance(st, datetime):
+                base_time = st
+
+        # 简单的全图遍历 (优化：使用 numba 加速这部分)
+        # 这里仅作演示，实际应使用更高效的算法
+        # 寻找每一列的触发区间
+
+        # 简化策略：只要任意通道触发，就算一个事件
+        # 对空间轴取 max，得到时间轴上的 1D 触发序列
+        time_trigger = np.any(mask, axis=1).astype(int)
+        diff = np.diff(time_trigger, prepend=0)
+
+        starts = np.where(diff == 1)[0]
+        ends = np.where(diff == -1)[0]
+
+        # 处理边界
+        if len(starts) > len(ends):
+            ends = np.append(ends, nt - 1)
+
+        for i, (s, e) in enumerate(zip(starts, ends)):
+            # 找到触发的通道范围
+            event_slice = mask[s:e, :]
+            # 哪些通道在这段时间内触发过
+            ch_mask = np.any(event_slice, axis=0)
+            ch_indices = np.where(ch_mask)[0]
+
+            if len(ch_indices) == 0:
+                continue
+
+            min_ch, max_ch = ch_indices[0], ch_indices[-1]
+
+            evt = DASEvent(
+                id=f"evt_{base_time.timestamp()}_{i}",
+                start_time=base_time + timedelta(seconds=float(t_coords[s])),
+                end_time=base_time + timedelta(seconds=float(t_coords[e - 1])),
+                min_channel=int(min_ch),
+                max_channel=int(max_ch),
+                confidence=1.0,
+                event_type="trigger",
+            )
+            events.append(evt)
+
+        return EventCatalog(events)
+
     def plot_ts(
         self,
         ch: Optional[int] = None,
@@ -549,6 +635,7 @@ class DASFrame:
         cmap: str = "RdBu_r",
         ax: Optional[Axes] = None,
         max_samples: int = 2000,
+        events: Optional["EventCatalog"] = None,
         **kwargs: Any,
     ) -> Figure:
         """绘制热图（瀑布图）。"""
@@ -598,6 +685,58 @@ class DASFrame:
         ax.set_title(title)
         if ax is not None:
             plt.colorbar(im, ax=ax, label="Amplitude")
+
+        # 绘制事件叠加层
+        if events is not None and ax is not None:
+            from datetime import datetime
+
+            import matplotlib.patches as patches
+
+            # 需要将 datetime 转换为绘图坐标 (时间轴相对秒数)
+            # 获取当前 frame 的基准时间
+            base_time = None
+            inv = self.inventory
+            if inv and inv.acquisition and inv.acquisition.start_time:
+                st = inv.acquisition.start_time
+                if isinstance(st, str):
+                    try:
+                        base_time = datetime.fromisoformat(st.replace("Z", "+00:00"))
+                    except Exception:
+                        pass
+                elif isinstance(st, datetime):
+                    base_time = st
+
+            if base_time:
+                for row in events.df.iter_rows(named=True):
+                    # 计算相对时间
+                    t_start = (row["start_time"] - base_time).total_seconds()
+                    t_end = (row["end_time"] - base_time).total_seconds() if row["end_time"] else t_start + 1.0
+
+                    # 检查是否在当前显示范围内
+                    # time_coords 是相对时间数组
+                    if t_end < time_coords[0] or t_start > time_coords[-1]:
+                        continue
+
+                    # 绘制矩形框
+                    # x轴是 channel (distance), y轴是 time (seconds)
+                    # extent = (dist_min, dist_max, time_max, time_min)
+                    # 注意 imshow 的 extent y 轴通常是反向的或者从上到下的
+
+                    # 转换为 channel index 或 distance
+                    # 这里的 plot_heatmap 使用的是 dist_coords (物理距离) 或 channel index
+                    # extent[0] = dist_start, extent[1] = dist_end
+
+                    x_start = row["min_channel"] * self._dx
+                    x_width = (row["max_channel"] - row["min_channel"]) * self._dx
+                    y_start = t_start
+                    height = t_end - t_start
+
+                    rect = patches.Rectangle(
+                        (x_start, y_start), x_width, height, linewidth=1, edgecolor="r", facecolor="none", alpha=0.8
+                    )
+                    ax.add_patch(rect)
+                    ax.text(x_start, y_start, row["event_type"], color="red", fontsize=8)
+
         return fig
 
     def plot_fk(

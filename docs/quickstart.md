@@ -186,6 +186,42 @@ subset = spool.select(iu_model="QuantX", ProjectName="DeepWell")
 long_frame = subset.to_frame()
 ```
 
+
+### 7. 物理单位管理 (Units & SI Normalization)
+
+DASMatrix 集成了 Pint 单位系统，支持物理量纲的自动转换与归一化：
+
+```python
+# 将原始读数（如相角 rad）转换为标准 SI 单位（应变 strain）
+# 该方法会自动从元数据（标距、激光波长等）计算比例系数
+si_frame = frame.to_standard_units()
+
+# 显式单位换算
+# 将单位从 m/s 转换为 nm/s
+nanometer_frame = si_frame.convert_units("nm/s")
+print(f"当前单位: {nanometer_frame.get_unit()}")
+```
+
+### 8. 有状态流式处理 (Atoms & Streaming)
+
+使用 Atoms 框架进行分块处理，确保块边缘的数学连续性（如 IIR 滤波状态）：
+
+```python
+from DASMatrix.processing.atoms import Sequential, SosFilt, Partial
+
+# 定义有状态处理流水线
+pipeline = Sequential([
+    Partial("demean"),
+    SosFilt(sos_coeffs),  # 自动维护滤波器内部状态
+    Partial("abs")
+])
+
+# 实时流处理循环
+for chunk in stream_source:
+    # 每一块的处理都会继承上一块的滤波器状态，避免边缘跳变
+    processed_chunk = pipeline(chunk)
+```
+
 ## 下一步
 
 - 查看 [API 文档](api/index.md) 了解完整功能
