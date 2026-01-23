@@ -114,6 +114,14 @@ class DASFrame:
         return self._data.compute().values
 
     # --- 基础操作 ---
+    def astype(self, dtype: Any) -> "DASFrame":
+        """Cast data to a new type."""
+        return DASFrame(self._data.astype(dtype), self._fs, self._dx, **self._metadata)
+
+    def flatten(self) -> np.ndarray:
+        """Return a flattened version of the data (Sink)."""
+        return self.collect().flatten()
+
     def slice(self, t: slice = slice(None), x: slice = slice(None)) -> "DASFrame":
         """Slice data."""
         # xarray is slicing by index here (isel)
@@ -685,23 +693,23 @@ class DASFrame:
         frame = self if channels is None else self.slice(x=channels)
 
         if stat == "rms":
-            values = frame.rms()
+            values = cast(np.ndarray, frame.rms())
             default_title = "RMS Profile"
             default_ylabel = "RMS Amplitude"
         elif stat == "mean":
-            values = frame.mean(axis=0).flatten()
+            values = cast(np.ndarray, frame.mean(axis=0).flatten())
             default_title = "Mean Profile"
             default_ylabel = "Mean Amplitude"
         elif stat == "std":
-            values = frame.std(axis=0).flatten()
+            values = cast(np.ndarray, frame.std(axis=0).flatten())
             default_title = "Standard Deviation Profile"
             default_ylabel = "Std Amplitude"
         elif stat == "max":
-            values = frame.max(axis=0).flatten()
+            values = cast(np.ndarray, frame.max(axis=0).flatten())
             default_title = "Max Profile"
             default_ylabel = "Max Amplitude"
         elif stat == "min":
-            values = frame.min(axis=0).flatten()
+            values = cast(np.ndarray, frame.min(axis=0).flatten())
             default_title = "Min Profile"
             default_ylabel = "Min Amplitude"
         else:

@@ -77,7 +77,7 @@ def run_dashboard_demo(duration=30.0, lang="cn", focus_channel=64, open_browser=
 
             # 3. 更新仪表盘
             # 推送处理后的数据，确保 Max/RMS 数值与波形一致
-            dashboard.update(chunk=processed_data, events=events)
+            dashboard.update(chunk=processed_data, events=events.collect())
 
             processed_duration += chunk_duration
 
