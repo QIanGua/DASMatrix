@@ -148,7 +148,8 @@ class DASAgentTools:
         Args:
             data_id: 输入数据的 ID
             operations: 处理操作列表，每个操作是一个字典:
-                - op: 操作名称 (detrend, bandpass, highpass, lowpass, normalize, stft, fft, envelope)
+                - op: 操作名称 (detrend, bandpass, highpass, lowpass,
+                      normalize, stft, fft, envelope)
                 - 其他参数取决于具体操作
 
                 示例:
@@ -391,7 +392,7 @@ class DASAgentTools:
 
         # 生成图表 - 每个 plotter 返回 Figure 对象
         if plot_type == "waterfall":
-            fig = plotter.plot(arr, fs=data.fs, **kwargs)
+            fig = plotter.plot(arr, fs=data.fs, **kwargs)  # type: ignore
         elif plot_type == "spectrum":
             # 使用第一个通道
             channel_data = arr[:, 0] if arr.ndim > 1 else arr
@@ -402,10 +403,10 @@ class DASAgentTools:
             fig = plotter.plot(freqs, 20 * np.log10(spectrum + 1e-10), **kwargs)
         elif plot_type == "waveform":
             channel_data = arr[:, 0] if arr.ndim > 1 else arr
-            fig = plotter.plot(channel_data, fs=data.fs, **kwargs)
+            fig = plotter.plot(channel_data, fs=data.fs, **kwargs)  # type: ignore
         elif plot_type == "spectrogram":
             channel_data = arr[:, 0] if arr.ndim > 1 else arr
-            fig = plotter.plot(channel_data, fs=data.fs, **kwargs)
+            fig = plotter.plot(channel_data, fs=data.fs, **kwargs)  # type: ignore
 
         # 保存图片
         if output_path is None:

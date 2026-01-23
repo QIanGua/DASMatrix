@@ -59,7 +59,7 @@ def to_datetime64(
         # 解释为 Unix 时间戳（秒）
         # 转换为纳秒级整数
         ns_value = int(value * 1e9)
-        return np.datetime64(ns_value, "ns")
+        return np.datetime64(ns_value, "ns")  # type: ignore
 
     raise TypeError(
         f"Cannot convert {type(value).__name__} to datetime64. "

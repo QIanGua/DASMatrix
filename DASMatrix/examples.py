@@ -220,9 +220,13 @@ def _generate_spool_frames(name: str, n_frames: int, **kwargs) -> List[DASFrame]
     if name == "diverse_das":
         # 生成不同类型的帧
         types = ["sine_wave", "chirp", "event", "random_das", "impulse"]
+        from typing import cast
+
         for i in range(n_frames):
             frame_type = types[i % len(types)]
-            frame = get_example_frame(frame_type, seed=42 + i, **kwargs)
+            frame = get_example_frame(
+                cast(ExampleFrameType, frame_type), seed=42 + i, **kwargs
+            )
             frames.append(frame)
 
     elif name == "continuous":

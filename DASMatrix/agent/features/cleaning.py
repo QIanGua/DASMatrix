@@ -112,7 +112,8 @@ def apply_cleaning_recipe(
             {"op": "highpass", "cutoff": 1.0, "order": 4},
         ],
         "remove_powerline": [
-            # 简单的陷波器模拟 (组合高通低通或其他方式，当前 DASMatrix 尚未实现专用 notch，暂用带阻模拟或多次滤波)
+            # 简单的陷波器模拟 (组合高通低通或其他方式，
+            # 当前 DASMatrix 尚未实现专用 notch，暂用带阻模拟或多次滤波)
             # 暂时用简单的 detrend 代替，实际应添加 notch 算子支持
             {"op": "detrend"}
         ],
@@ -138,7 +139,7 @@ def apply_cleaning_recipe(
     for op_config in operations:
         # 复制配置以防修改
         config = op_config.copy()
-        op_name = config.pop("op")
+        op_name = str(config.pop("op"))
 
         if not hasattr(result, op_name):
             # 如果是复合操作或未实现的，暂时跳过或报错

@@ -55,7 +55,7 @@ class SEGYFormatPlugin(FormatPlugin):
     def scan(self, path: Path) -> FormatMetadata:
         """快速扫描 SEG-Y 文件元数据"""
         try:
-            import obspy  # type: ignore
+            import obspy
 
             # headonly=True 只读取头部
             st = obspy.read(str(path), format="SEGY", headonly=True)
@@ -109,7 +109,7 @@ class SEGYFormatPlugin(FormatPlugin):
             SEG-Y 格式目前使用 ObsPy 读取, 暂不支持真正的延迟加载。
             数据会立即加载到内存中。
         """
-        import obspy  # type: ignore
+        import obspy
 
         st = obspy.read(str(path), format="SEGY")
 

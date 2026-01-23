@@ -16,7 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class FiberGeometry(BaseModel):
     """Geometry information of the sensing fiber."""
 
-    # Configuration to allow arbitrary types if needed, though mostly standard types here
+    # Configuration to allow arbitrary types if needed,
+    # though mostly standard types here
     model_config = ConfigDict(extra="ignore")
 
     coordinates: Optional[List[Tuple[float, float, float]]] = Field(
@@ -131,10 +132,11 @@ class DASInventory(BaseModel):
                 content = Path(path_or_str).read_text(encoding="utf-8")
             except OSError:
                 # Fallback: maybe it's a JSON string that happens to be short?
-                # Unlikely but possible. For now assume it's a file path if shorter than 256 char
-                content = path_or_str
+                # Unlikely but possible. For now assume it's a file path
+                # if shorter than 256 char
+                content = str(path_or_str)
         else:
-            content = path_or_str
+            content = str(path_or_str)
 
         return cls.model_validate_json(content)
 
@@ -159,11 +161,13 @@ class DASInventory(BaseModel):
         info = [f"DASInventory(project='{self.project_name}')"]
         if self.acquisition:
             info.append(
-                f"  Shape: {self.acquisition.n_channels} ch x {self.acquisition.n_samples or '?'} samples"
+                f"  Shape: {self.acquisition.n_channels} ch x "
+                f"{self.acquisition.n_samples or '?'} samples"
             )
             info.append(f"  Time: {self.acquisition.start_time}")
         if self.interrogator:
             info.append(
-                f"  Interrogator: {self.interrogator.manufacturer} {self.interrogator.model} @ {self.interrogator.sampling_rate} Hz"
+                f"  Interrogator: {self.interrogator.manufacturer} "
+                f"{self.interrogator.model} @ {self.interrogator.sampling_rate} Hz"
             )
         return "\n".join(info)

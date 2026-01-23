@@ -61,7 +61,7 @@ class NetCDFFormatPlugin(FormatPlugin):
         except Exception:
             return False
 
-    def _find_data_var(self, ds: xr.Dataset) -> str:  # type: ignore[return]
+    def _find_data_var(self, ds: xr.Dataset) -> str:
         """查找主数据变量"""
         # 常见的变量名
         common_names = ["data", "strain", "strain_rate", "velocity", "amplitude"]

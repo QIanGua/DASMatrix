@@ -21,7 +21,7 @@ from typing import List, Optional, Union
 import dask.array as da
 import h5py
 import numpy as np
-import obspy  # type: ignore
+import obspy
 import xarray as xr
 
 from ..config.sampling_config import SamplingConfig
