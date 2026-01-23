@@ -716,7 +716,7 @@ class DASFrame:
     def to_obspy(self) -> Any:
         """Convert to ObsPy Stream."""
         try:
-            from obspy import Stream, Trace, UTCDateTime  # type: ignore
+            from obspy import Stream, Trace, UTCDateTime
         except ImportError:
             raise ImportError("obspy is required for to_obspy(). Install it with `pip install obspy`.")
 

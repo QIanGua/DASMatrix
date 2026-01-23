@@ -261,7 +261,7 @@ class _MemorySpool(DASSpool):
     def __iter__(self):
         return iter(self._frames)
 
-    def update(self) -> "_MemorySpool":
+    def update(self, force: bool = False) -> "_MemorySpool":
         """内存 Spool 不需要更新。"""
         return self
 
