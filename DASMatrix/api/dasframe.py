@@ -7,6 +7,8 @@ import numpy as np
 import xarray as xr
 from scipy import signal
 
+from ..core.inventory import DASInventory
+
 
 class DASFrame:
     """DAS 数据处理核心类 (Xarray/Dask Backend)。
@@ -39,12 +41,24 @@ class DASFrame:
             self._data = data._data
             self._fs = data.fs
             self._dx = getattr(data, "_dx", dx)
+            # Combine metadata, new metadata overrides old
             self._metadata = {**data._metadata, **metadata}
+            # Special handling for inventory in metadata to ensure type safety
+            if "inventory" in self._metadata:
+                inv = self._metadata["inventory"]
+                if isinstance(inv, dict):
+                    self._metadata["inventory"] = DASInventory.model_validate(inv)
             return
 
         self._fs = fs
         self._dx = dx
         self._metadata = metadata
+
+        # Helper to ensure inventory is properly typed if passed
+        if "inventory" in self._metadata:
+            inv = self._metadata["inventory"]
+            if isinstance(inv, dict):
+                self._metadata["inventory"] = DASInventory.model_validate(inv)
 
         if isinstance(data, xr.DataArray):
             # Ensure order is (time, distance)
@@ -84,6 +98,11 @@ class DASFrame:
     @property
     def fs(self) -> float:
         return self._fs
+
+    @property
+    def inventory(self) -> Optional[DASInventory]:
+        """Access the DASInventory object if available."""
+        return self._metadata.get("inventory")
 
     @property
     def shape(self) -> Tuple[int, ...]:
@@ -275,14 +294,14 @@ class DASFrame:
             return np.sqrt(rolling_mean.compute().values)
 
     def fft(self) -> "DASFrame":
-        """快速傅立叶变换，计算频谱幅度。"""
+        """快速傅立叶变换 (Real FFT)，返回单边幅度谱。"""
 
         def _fft_func(data):
-            return np.abs(np.fft.fft(data, axis=-1))
+            return np.abs(np.fft.rfft(data, axis=-1))
 
         data = self._data.chunk({"time": -1})
         n_samples = data.sizes["time"]
-        freqs = np.fft.fftfreq(n_samples, 1 / self._fs)
+        freqs = np.fft.rfftfreq(n_samples, 1 / self._fs)
 
         spectrum = xr.apply_ufunc(
             _fft_func,
@@ -291,12 +310,15 @@ class DASFrame:
             output_core_dims=[["frequency"]],
             dask="parallelized",
             output_dtypes=[float],
-            dask_gufunc_kwargs={"output_sizes": {"frequency": n_samples}},
+            dask_gufunc_kwargs={"output_sizes": {"frequency": len(freqs)}},
         )
 
         spectrum = spectrum.assign_coords(frequency=freqs)
+        # apply_ufunc moves core dims to the end, result is (distance, frequency)
+        # transpose back to (frequency, distance) to match convention
+        spectrum = spectrum.transpose("frequency", ...)
+
         # 注意：FFT 变换后，'time' 轴变成了 'frequency' 轴，fs 含义也变化了
-        # 这里为了链式调用返回 DASFrame，但其内部结构已经发生了变化（domain 位移）
         return DASFrame(spectrum, self._fs, self._dx, **self._metadata)
 
     def hilbert(self) -> "DASFrame":
@@ -338,6 +360,20 @@ class DASFrame:
     def abs(self) -> "DASFrame":
         """Absolute value."""
         return DASFrame(np.abs(self._data), self._fs, self._dx, **self._metadata)
+
+    def integrate(self) -> "DASFrame":
+        """Time domain integration (cumulative sum / fs)."""
+        # trapezium integration or simple cumsum
+        # cumsum is faster and dask friendly
+        integrated = self._data.cumsum(dim="time") / self._fs
+        return DASFrame(integrated, self._fs, self._dx, **self._metadata)
+
+    def differentiate(self) -> "DASFrame":
+        """Time domain differentiation (diff * fs)."""
+        differentiated = self._data.diff(dim="time") * self._fs
+        # diff reduce size by 1, pad to keep shape
+        differentiated = differentiated.pad(time=(1, 0), mode="edge")
+        return DASFrame(differentiated, self._fs, self._dx, **self._metadata)
 
     def stft(self, nperseg: int = 256, noverlap: Optional[int] = None) -> "DASFrame":
         """短时傅立叶变换，进行时频分析。"""

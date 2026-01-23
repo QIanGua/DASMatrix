@@ -187,7 +187,22 @@ class FormatRegistry:
             raise ValueError(f"未注册的格式: {format_name}")
 
         logger.debug(f"使用 {format_name} 格式读取: {path}")
-        return plugin.read(path, **kwargs)
+        data = plugin.read(path, **kwargs)
+
+        # 尝试附加 Inventory
+        if (
+            isinstance(data, (xr.DataArray, xr.Dataset))
+            and "inventory" not in data.attrs
+        ):
+            try:
+                # 避免重复读取，如果插件已经在 read 中利用了 scan 逻辑最好，
+                # 但为了通用性，这里显式 scan 一次
+                meta = plugin.scan(path)
+                data.attrs["inventory"] = meta.to_inventory()
+            except Exception as e:
+                logger.warning(f"无法生成 Inventory: {e}")
+
+        return data
 
     @classmethod
     def list_formats(cls) -> list[str]:

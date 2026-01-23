@@ -1,6 +1,5 @@
 """函数式API入口，提供便捷的DASFrame创建方法。"""
 
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -48,20 +47,20 @@ def read(
         >>> # 读取 DAT 文件（需要指定参数）
         >>> frame = df.read("data.dat", fs=10000, channels=512)
     """
-    ext = os.path.splitext(path)[1].lower()
+    from ..acquisition.formats import FormatRegistry
 
-    if ext in (".h5", ".hdf5"):
-        return _read_h5(path, fs=fs, **kwargs)
-    elif ext == ".dat":
-        if fs is None or channels is None:
-            raise ValueError(
-                "读取 DAT 文件需要指定 fs（采样频率）和 channels（通道数）参数"
-            )
-        return _read_dat(
-            path, fs=fs, channels=channels, byte_order=byte_order, **kwargs
-        )
-    else:
-        raise ValueError(f"不支持的文件类型: {ext}")
+    # 使用 FormatRegistry 统一读取
+    # 这将返回带有 attrs['inventory'] 的 xr.DataArray
+    daa = FormatRegistry.read(path, fs=fs, **kwargs)
+
+    # 提取关键参数
+    attrs = getattr(daa, "attrs", {})
+    fs_val = attrs.get("fs", fs)
+    if fs_val is None:
+        # Fallback if not found
+        fs_val = 1.0
+
+    return _create_dasframe(daa, fs=fs_val, **attrs)
 
 
 def _read_h5(path: str, fs: Optional[float] = None, **kwargs):

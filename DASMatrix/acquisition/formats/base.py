@@ -6,11 +6,14 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import dask.array as da
 import numpy as np
 import xarray as xr
+
+if TYPE_CHECKING:
+    from ...core.inventory import DASInventory
 
 
 @dataclass
@@ -35,6 +38,25 @@ class FormatMetadata:
 
     # 扩展属性
     attrs: dict = field(default_factory=dict)
+
+    def to_inventory(self) -> "DASInventory":
+        """Convert to DASInventory object."""
+        from ...core.inventory import Acquisition, DASInventory, FiberGeometry
+
+        return DASInventory(
+            project_name=self.attrs.get("project_name", "Unknown"),
+            acquisition=Acquisition(
+                start_time=self.start_time or "1970-01-01T00:00:00",  # type: ignore
+                n_channels=self.n_channels,
+                n_samples=self.n_samples,
+                data_unit=self.data_unit,
+            ),
+            fiber=FiberGeometry(
+                channel_spacing=self.channel_spacing or 1.0,
+                gauge_length=self.gauge_length or 1.0,
+            ),
+            custom_attrs=self.attrs,
+        )
 
 
 class FormatPlugin(ABC):

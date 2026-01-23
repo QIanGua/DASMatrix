@@ -33,6 +33,9 @@ dependencies = [
     "uvicorn>=0.23.0",
     "websockets>=11.0",
     "python-multipart>=0.0.6",
+    "openpyxl>=3.1.5",
+    "pint>=0.23",
+    "pydantic>=2.12.5",
 ]
 
 [tool.setuptools]
@@ -56,7 +59,7 @@ select = [
 ] # E=pycodestyle errors, F=pyflakes, W=pycodestyle warnings, I=isort
 
 [tool.ruff.lint.per-file-ignores]
-"examples/*" = ["E402"]  # 允许 examples 中 import 前有配置代码
+"examples/*" = ["E402"] # 允许 examples 中 import 前有配置代码
 
 [tool.ruff.format]
 quote-style = "double"
@@ -73,6 +76,7 @@ dev = [
     "mkdocs-section-index>=0.3.0",
     "ruff>=0.1.0",
     "pre-commit>=4.3.0",
+    "pytest-benchmark>=5.2.3",
 ]
 
 [tool.mypy]
