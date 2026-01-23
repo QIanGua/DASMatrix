@@ -124,7 +124,7 @@ processed.plot_std(
 | 方法 | 说明 |
 |------|------|
 | `fft()` | 快速傅里叶变换 |
-| `stft()` | 短时傅里叶变换 |
+| `stft()` | 短时傅里叶变换 (现代 ShortTimeFFT API) |
 | `hilbert()` | 希尔伯特变换 |
 | `envelope()` | 包络提取 |
 
@@ -142,6 +142,18 @@ processed.plot_std(
 | `plot_std()` | 绘制标准差剖面图 |
 
 ---
+
+
+### 4. 极致性能：延迟计算与保护
+
+DASMatrix 采用 "Lazy-by-Default" 策略：
+- **链式算子**：`.bandpass().detrend()` 等操作不会立即计算，而是构建计算图。
+- **自动分块**：后台自动并行化处理，支持处理大于内存的数据集。
+- **绘图降采样**：
+  ```python
+  # 即使有 1 亿个采样点，该方法也会自动降采样至 2000 点进行快速显示
+  processed.plot_heatmap(max_samples=2000)
+  ```
 
 ## 下一步
 

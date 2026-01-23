@@ -20,7 +20,7 @@ DASMatrix is a high-performance Python framework specifically designed for Distr
 ### ✨ Core Features
 
 - **🚀 High-Efficiency Data Reading**: Support for 12+ data formats (DAT, HDF5, PRODML, Silixa, Febus, Terra15, APSensing, ZARR, NetCDF, SEG-Y, MiniSEED, TDMS) with **Lazy Loading**
-- **⚡ Distributed Computing Core**: Built on **Xarray** and **Dask** with Out-of-Core processing support
+- **⚡ HPC Engine**: Built on **Xarray** and **Dask** for TB-level Out-of-Core processing with **Numba** JIT-optimized kernels and operator fusion
 - **🔗 Fluent Chainable API**: Intuitive signal processing workflows through `DASFrame`
 - **📊 Professional Signal Processing**: Comprehensive tools including spectral analysis, filtering, integration
 - **📈 Scientific-Grade Visualization**: Multiple plot types including time-domain waveforms, spectra, spectrograms, waterfalls
@@ -69,11 +69,14 @@ processed = (
     .normalize()            # Normalize
 )
 
-# Execute computation
+# Advanced Analysis (Modern STFT API)
+stft_frame = frame.stft(nperseg=1024, noverlap=512)
+
+# Execute computation (Parallelized via Dask)
 result = processed.collect()
 
-# Quick visualization
-processed.plot_heatmap(title="Processed Waterfall")
+# Scientific Visualization (with Auto-Decimation Protection)
+processed.plot_heatmap(title="HPC Waterfall", max_samples=2000)
 ```
 
 #### 2. Legacy API
@@ -174,6 +177,15 @@ DASMatrix/
 └── utils/                 # Utility functions
     └── time.py           # Time conversion tools
 ```
+
+
+## 🚀 High Performance Computing (HPC)
+
+DASMatrix is engineered for massive DAS datasets:
+- **Zero-Copy Loading**: Utilizing `np.memmap` for binary formats to index TBs of data in milliseconds.
+*   **Kernel Fusion**: Multiple operations (e.g., `demean -> filter -> abs`) are fused into a single machine-code loop via Numba, minimizing memory traffic.
+*   **Lazy Computation Graph**: Every operation returns a lazy `DASFrame`. Real computation only happens when you explicitly `collect()` or `plot()`.
+*   **Auto-Decimation**: Interactive visualization of huge datasets is protected by automatic downsampling to keep your UI responsive.
 
 ## 🔧 Development
 
