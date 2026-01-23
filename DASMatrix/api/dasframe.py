@@ -553,8 +553,6 @@ class DASFrame:
     ) -> Figure:
         """绘制热图（瀑布图）。"""
         if t_range is not None or channels is not None:
-            import warnings
-
             warnings.warn("Using t_range or channels in plot_heatmap is deprecated. Please use .slice() instead.")
             frame = self.slice(t=t_range or slice(None), x=channels or slice(None))
         else:
@@ -777,8 +775,6 @@ class DASFrame:
 
     # --- Units and Physical Quantities ---
 
-    # --- Units and Physical Quantities ---
-
     def to_standard_units(self) -> "DASFrame":
         """将数据转换为标准化的物理单位 (SI)。
 
@@ -850,3 +846,67 @@ class DASFrame:
         converted = q.to(target_unit).magnitude
 
         return DASFrame(converted, fs=self._fs, dx=self._dx)._update_unit_metadata(target_unit)
+
+    # --- Analysis and Detection ---
+
+    def template_match(self, template: Union[np.ndarray, "DASFrame"], axis: str = "time") -> "DASFrame":
+        """Perform Normalized Cross-Correlation (NCC) template matching.
+
+        If template is 1D, it matches along the specified axis (independently per channel if axis=time).
+        If template is 2D, it performs spatio-temporal matching.
+        """
+        from ..analysis.template_matching import sliding_ncc_1d, sliding_ncc_2d
+
+        if isinstance(template, DASFrame):
+            t_data = template.collect()
+        else:
+            t_data = np.asarray(template)
+
+        if t_data.ndim == 1:
+
+            def _match_func(block, temp):
+                return sliding_ncc_1d(block, temp)
+
+            # Apply along core dimension
+            res = xr.apply_ufunc(
+                _match_func,
+                self._data,
+                kwargs={"temp": t_data},
+                input_core_dims=[[axis]],
+                output_core_dims=[[f"{axis}_match"]],
+                exclude_dims=set([axis]),
+                dask="parallelized",
+                output_dtypes=[self._data.dtype],
+                dask_gufunc_kwargs={"output_sizes": {f"{axis}_match": self._data.sizes[axis] - t_data.shape[0] + 1}},
+            )
+            return DASFrame(res.rename({f"{axis}_match": axis}), self._fs, self._dx, **self._metadata)
+
+        elif t_data.ndim == 2:
+            # Spatio-temporal matching (2D convolution)
+            # This is complex for apply_ufunc if distance chunks > 1.
+            # For simplicity, handle time axis matching per spatial block.
+            def _match_2d_func(block, temp):
+                return sliding_ncc_2d(block, temp)
+
+            # For 2D, we treat both dims as core
+            res = xr.apply_ufunc(
+                _match_2d_func,
+                self._data,
+                kwargs={"temp": t_data},
+                input_core_dims=[["time", "distance"]],
+                output_core_dims=[["time_match", "distance_match"]],
+                exclude_dims=set(["time", "distance"]),
+                dask="parallelized",
+                output_dtypes=[self._data.dtype],
+                dask_gufunc_kwargs={
+                    "output_sizes": {
+                        "time_match": self._data.sizes["time"] - t_data.shape[0] + 1,
+                        "distance_match": self._data.sizes["distance"] - t_data.shape[1] + 1,
+                    }
+                },
+            )
+            return DASFrame(
+                res.rename({"time_match": "time", "distance_match": "distance"}), self._fs, self._dx, **self._metadata
+            )
+
+        return self
