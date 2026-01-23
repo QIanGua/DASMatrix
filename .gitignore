@@ -45,3 +45,4 @@ ty_report.txt
 examples/stft_spectrogram.py
 tmp
 .claude
+scratch/

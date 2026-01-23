@@ -56,6 +56,10 @@ clean:
     find . -type d -name "__pycache__" -exec rm -rf {} +
     find . -type d -name "*.egg-info" -exec rm -rf {} +
 
+# Run performance benchmarks
+benchmark:
+    uv run pytest tests/performance --benchmark-only
+
 # Build documentation
 docs:
     uv run mkdocs build
