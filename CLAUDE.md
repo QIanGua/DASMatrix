@@ -68,10 +68,11 @@ just clean
 ```
 
 #### Recommended Workflow
-1. **During development**: `just fix-all` to auto-fix issues
-2. **Before committing**: Git hooks auto-run (no action needed)
-3. **Before release/CI**: `just check-all` for comprehensive validation
-4. **For manual validation**: `just quick-check` (same as pre-push)
+1. **Feature Dev**: Follow `.agent/workflows/feature-development.md`
+   - **CRITICAL**: Update `README.md`, `PRD.md`, and `docs/` alongside code changes.
+2. **During development**: `just fix-all` to auto-fix issues
+3. **Before committing**: Git hooks auto-run (no action needed)
+4. **Before release/CI**: `just check-all` for comprehensive validation
 
 ### Documentation
 ```bash
@@ -126,7 +127,7 @@ just docs
 
 1. **Data Acquisition (`DASMatrix.acquisition`)**
    - `DASReader`: Legacy unified reader with `DataType` enum (DAT, H5, SEGY, MINISEED)
-   - `FormatRegistry`: New plugin-based format detection and reading system
+   - `FormatRegistry`: Plugin-based format detection supporting 12 formats (PRODML, Silixa, Febus, APSensing, Terra15, H5, DAT, Zarr, NetCDF, SEGY, MiniSEED, TDMS)
    - Format plugins in `acquisition/formats/`: Extensible support for new data formats
 
 2. **Core API (`DASMatrix.api`)**

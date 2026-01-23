@@ -162,10 +162,11 @@ DASMatrix/                         # 项目根目录
 ├── DASMatrix/                     # 源代码目录 ✅
 │   ├── __init__.py
 │   │
-│   ├── api/                       # 高级API层 🚧
+│   ├── api/                       # 高级API层 ✅
 │   │   ├── __init__.py
 │   │   ├── dasframe.py            # DASFrame核心对象 ✅ (Xarray/Dask后端)
-│   │   └── df.py                  # df函数式API入口 ✅
+│   │   ├── df.py                  # df函数式API入口 ✅
+│   │   └── spool.py               # DASSpool多文件管理 ✅
 │   │   # 📋 计划: dsl.py, q.py, easy.py, pipeline_builder.py
 │   │
 │   ├── core/                      # 核心模块 🚧
@@ -179,9 +180,23 @@ DASMatrix/                         # 项目根目录
 │   │   └── visualization_config.py # 可视化配置 ✅ (Nature/Science风格)
 │   │   # 📋 计划: processing_config.py, storage_config.py
 │   │
-│   ├── acquisition/               # 数据采集层 🚧
+│   ├── acquisition/               # 数据采集层 ✅
 │   │   ├── __init__.py
-│   │   └── das_reader.py          # 统一数据读取接口 ✅ (支持DAT/H5/Zarr)
+│   │   ├── das_reader.py          # 统一数据读取接口 ✅ (兼容旧版)
+│   │   └── formats/               # 格式插件系统 ✅ (12种格式)
+│   │       ├── base.py            # FormatPlugin协议
+│   │       ├── h5.py              # HDF5格式
+│   │       ├── dat.py             # DAT格式
+│   │       ├── prodml.py          # PRODML v2.0/2.1
+│   │       ├── silixa.py          # Silixa HDF5
+│   │       ├── febus.py           # Febus Optics
+│   │       ├── terra15.py         # Terra15
+│   │       ├── apsensing.py       # AP Sensing
+│   │       ├── zarr_format.py     # Zarr云原生
+│   │       ├── netcdf.py          # NetCDF
+│   │       ├── segy.py            # SEG-Y
+│   │       ├── miniseed.py        # MiniSEED
+│   │       └── tdms.py            # TDMS (可选)
 │   │   # 📋 计划: stream_reader.py, sources/
 │   │
 │   ├── processing/                # 数据处理层 ✅
@@ -199,10 +214,16 @@ DASMatrix/                         # 项目根目录
 │   │       ├── numba_backend.py   # 高性能CPU后端 ✅
 │   │       └── polars_backend.py  # Polars后端 ✅
 │   │
-│   └── visualization/             # 可视化层 ✅
+│   ├── visualization/             # 可视化层 ✅
+│   │   ├── __init__.py
+│   │   ├── das_visualizer.py      # 统一可视化接口 ✅ (含多种图表类)
+│   │   └── styles.py              # Nature/Science出版级样式 ✅
+│   │
+│   ├── units.py                   # 单位系统 ✅ (基于 Pint)
+│   ├── examples.py                # 示例数据生成 ✅
+│   └── utils/                     # 工具函数 ✅
 │       ├── __init__.py
-│       ├── das_visualizer.py      # 统一可视化接口 ✅ (含多种图表类)
-│       └── styles.py              # Nature/Science出版级样式 ✅
+│       └── time.py                # 时间工具函数 ✅
 │
 ├── tests/                         # 测试目录 ✅
 │   ├── unit/                      # 单元测试 ✅
@@ -210,6 +231,9 @@ DASMatrix/                         # 项目根目录
 │   │   ├── test_computation_graph.py
 │   │   ├── test_hybrid_engine.py
 │   │   ├── test_visualization.py
+│   │   ├── test_units.py          # 单位系统测试 ✅
+│   │   ├── test_examples.py       # 示例数据测试 ✅
+│   │   ├── test_time_utils.py     # 时间工具测试 ✅
 │   │   └── ...
 │   └── performance/               # 性能测试 🚧
 │
@@ -401,9 +425,9 @@ def fused_kernel(x, out):
 |------|-----------|---------|------|-------|
 | **GitHub Stars** | 新项目 | 63★ | 38★ | 84★ |
 | **核心后端** | Xarray/Dask | 自定义 Patch/Spool | Xarray-like | ObsPy + NumPy |
-| **文件格式支持** | 4种 | 20+ 种 | 10+ 种 | 10+ 种 |
+| **文件格式支持** | 12种 | 20+ 种 | 10+ 种 | 10+ 种 |
 | **延迟计算** | ✅ Dask | ✅ 自定义 | ✅ 自定义 | ❌ 即时计算 |
-| **多文件虚拟合并** | 📋 计划 | ✅ Spool | ✅ open_mfdataarray | ❌ |
+| **多文件虚拟合并** | ✅ DASSpool | ✅ Spool | ✅ open_mfdataarray | ❌ |
 | **分块处理 (OOC)** | ✅ Dask | ✅ 原生 | ✅ Atoms | ❌ |
 | **GPU 支持** | 📋 计划 | 📋 计划 | ❌ | ❌ |
 | **流处理** | 🚧 部分 | ❌ | ✅ | ❌ |
@@ -411,7 +435,7 @@ def fused_kernel(x, out):
 | **可视化** | ✅ Matplotlib | ✅ 基础 | ✅ 基础 | ✅ |
 | **Web Dashboard** | ✅ FastAPI | ❌ | ❌ | ❌ |
 | **文档质量** | 🚧 | ✅✅✅ (Quarto) | ✅✅ | ✅✅ |
-| **测试覆盖** | 🚧 ~60% | ✅ 99.5% | ✅ ~85% | ✅ ~80% |
+| **测试覆盖** | ✅ 94个用例 | ✅ 99.5% | ✅ ~85% | ✅ ~80% |
 
 ### 9.2 竞品独特亮点
 
@@ -447,22 +471,27 @@ def fused_kernel(x, out):
 
 | 差距项 | 当前状态 | 目标状态 | 影响 |
 |--------|----------|----------|------|
-| 文件格式支持 | 4 种 | 15+ 种 | 无法处理实际 DAS 数据 |
-| 多文件管理 | 无 | Spool 抽象 | 无法处理 TB 级多文件数据集 |
+| ~~文件格式支持~~ | ✅ 12 种 | 15+ 种 | 已大幅改善 |
+| ~~多文件管理~~ | ✅ DASSpool | Spool 抽象 | 已实现 |
+| ~~单位系统~~ | ✅ Pint 集成 | 单位支持 | **已实现 (2026-01)** |
+| ~~示例数据~~ | ✅ get_example_frame | 内置示例 | **已实现 (2026-01)** |
+| ~~时间工具~~ | ✅ to_datetime64 等 | 时间转换 | **已实现 (2026-01)** |
 | 元数据管理 | 简单字典 | Inventory 系统 | 无法标准化元数据 |
 | 互操作性 | 无 | ObsPy/DASCore 互转 | 与地震学生态隔离 |
-| 测试覆盖 | ~60% | 90%+ | 代码质量无保障 |
+| ~~测试覆盖~~ | ✅ 146个用例 | 90%+ | 已显著改善 |
 | 有状态处理 | 无 | Atoms 框架 | 分块处理时滤波不连续 |
 
 ---
 
 ## 10. 优化方向与详细方案
 
-### 10.1 P0 优先级: 文件格式扩展
+### 10.1 ~~P0 优先级: 文件格式扩展~~ ✅ 已实现
 
-**问题**: 仅支持 4 种格式, 无法满足实际 DAS 数据处理需求
+> **更新 (2026-01)**: 已实现 12 种格式插件，包括所有 P0 和大部分 P1 格式。
 
-**目标格式** (按使用频率排序):
+**原问题**: 仅支持 4 种格式, 无法满足实际 DAS 数据处理需求
+
+**已实现格式** (按使用频率排序):
 
 | 格式 | 厂商/标准 | 优先级 |
 |------|-----------|--------|
@@ -545,11 +574,13 @@ class FormatRegistry:
 
 ---
 
-### 10.2 P0 优先级: 多文件 Spool 管理
+### 10.2 ~~P0 优先级: 多文件 Spool 管理~~ ✅ 已实现
 
-**问题**: 无法处理 TB 级多文件数据集
+> **更新 (2026-01)**: `DASSpool` 已完整实现于 `DASMatrix/api/spool.py`。
 
-**技术方案**:
+**原问题**: 无法处理 TB 级多文件数据集
+
+**实际实现**:
 
 ```python
 # DASMatrix/api/spool.py
@@ -1005,9 +1036,12 @@ class DASFrame:
 
 ---
 
-### 10.6 P2 优先级: 测试与质量保障
+### 10.6 P2 优先级: 测试与质量保障 (⚠️ 进行中)
+
+**更新 (2026-01)**: 已建立性能基准测试体系 (`tests/performance`) 和 DSP 精度验证套件 (`tests/unit/test_accuracy.py`)。
 
 **目标**: 测试覆盖率从 ~60% 提升到 90%+
+
 
 **测试矩阵**:
 

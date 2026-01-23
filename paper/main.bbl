@@ -1,0 +1,37 @@
+\begin{thebibliography}{1}
+
+\bibitem{harris2020array}
+Charles~R Harris, K~Jarrod Millman, St{\'e}fan~J van~der Walt, Ralf Gommers,
+  Pauli Virtanen, David Cournapeau, Eric Wieser, Julian Taylor, Sebastian Berg,
+  Nathaniel~J Smith, et~al.
+\newblock Array programming with numpy.
+\newblock {\em Nature}, 585(7825):357--362, 2020.
+
+\bibitem{hoyer2017xarray}
+Stephan Hoyer and Joe Hamman.
+\newblock xarray: N-d labeled arrays and datasets in python.
+\newblock {\em Journal of Open Research Software}, 5(1), 2017.
+
+\bibitem{lam2015numba}
+Siu~Kwan Lam, Antoine Pitrou, and Stanley Seibert.
+\newblock Numba: A llvm-based python jit compiler, 2015.
+
+\bibitem{lindsey2020fiber}
+Nathaniel~J Lindsey, Gillan Martin, Douglas~S Dreger, Barry Freifeld, Stephen
+  Cole, Stephanie~R James, Biondo~L Biondi, and Jonathan~B Ajo-Franklin.
+\newblock Fiber-optic network observations of earthquake wavefields.
+\newblock {\em Geophysical Research Letters}, 44(23):11--792, 2017.
+
+\bibitem{parker2014distributed}
+Tom Parker, Sergey Shatalin, and Mahmoud Farhadiroushan.
+\newblock Distributed acoustic sensing: a new tool for seismic applications.
+\newblock {\em First Break}, 32(12), 2014.
+
+\bibitem{rocklin2015dask}
+Matthew Rocklin.
+\newblock Dask: Parallel computation with blocked algorithms and task
+  scheduling.
+\newblock In {\em Proceedings of the 14th python in science conference}, volume
+  130, page 126. Citeseer, 2015.
+
+\end{thebibliography}

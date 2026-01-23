@@ -12,7 +12,7 @@ DASMatrix 是一个专为分布式声学传感（DAS）数据处理和分析设�
 
 ## 核心特性
 
-- 🚀 **高效数据读取**：支持 DAT、HDF5、SEGY 等多种数据格式
+- 🚀 **高效数据读取**：支持 12+ 种数据格式（DAT、HDF5、PRODML、Silixa、Febus、Terra15、APSensing、ZARR、NetCDF、SEG-Y、MiniSEED、TDMS）
 - 📊 **专业信号处理**：提供滤波、频率分析、FK 滤波、自动增益控制等
 - 🎨 **科学级可视化**：符合 Nature/Science 发表标准的波形图、瀑布图、FK 谱图
 - ⚡ **高性能设计**：基于 Xarray 和 Dask 构建，支持 TB 级超大数据的延迟计算

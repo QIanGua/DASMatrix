@@ -19,11 +19,13 @@ DASMatrix 是一个专为分布式声学传感（DAS）数据处理和分析设�
 
 ### ✨ 核心特性
 
-- **🚀 高效数据读取**：支持 DAT、HDF5 等多种数据格式，支持 **Lazy Loading**
+- **🚀 高效数据读取**：支持 12+ 种数据格式（DAT、HDF5、PRODML、Silixa、Febus、Terra15、APSensing、ZARR、NetCDF、SEG-Y、MiniSEED、TDMS），支持 **Lazy Loading**
 - **⚡ 分布式计算核心**：基于 **Xarray** 和 **Dask** 构建，支持外存处理（Out-of-Core）
 - **🔗 流畅的链式 API**：通过 `DASFrame` 提供直观的信号处理工作流
 - **📊 专业信号处理**：提供频谱分析、滤波、积分等多种信号处理功能
 - **📈 科学级可视化**：包含时域波形图、频谱图、时频图、瀑布图等多种可视化方式
+- **📏 单位系统**：通过 **Pint** 集成提供完善的物理单位支持
+- **🎲 内置示例**：便捷生成合成数据（正弦波、Chirp、模拟事件）用于测试
 - **🎯 高性能设计**：关键算法采用向量化和并行计算优化
 
 ## 🚀 快速开始
@@ -161,13 +163,16 @@ DASMatrix/
 ├── config/                # 配置模块
 │   ├── sampling_config.py # 采样配置
 │   └── visualization_config.py  # 可视化配置
-├── processing/            # 数据处理模块
-│   ├── das_processor.py  # DAS数据处理类
+├── processing/            # Data处理模块
+│   ├── das_processor.py  # DAS处理类
 │   ├── numba_filters.py  # Numba优化滤波器
 │   └── engine.py         # 计算图引擎
 ├── visualization/         # 可视化模块
 │   └── das_visualizer.py # DAS可视化类
+├── units.py               # 单位系统 (基于 Pint)
+├── examples.py            # 示例数据生成
 └── utils/                 # 工具函数
+    └── time.py           # 时间转换工具
 ```
 
 ## 🔧 开发
@@ -179,6 +184,12 @@ uv sync --dev
 
 # 运行测试
 just test
+
+# 运行测试
+just test
+
+# 运行性能基准测试
+just benchmark
 
 # 代码质量检查
 just check-all

@@ -19,11 +19,13 @@ DASMatrix is a high-performance Python framework specifically designed for Distr
 
 ### ✨ Core Features
 
-- **🚀 High-Efficiency Data Reading**: Support for multiple data formats including DAT, HDF5 with **Lazy Loading**
+- **🚀 High-Efficiency Data Reading**: Support for 12+ data formats (DAT, HDF5, PRODML, Silixa, Febus, Terra15, APSensing, ZARR, NetCDF, SEG-Y, MiniSEED, TDMS) with **Lazy Loading**
 - **⚡ Distributed Computing Core**: Built on **Xarray** and **Dask** with Out-of-Core processing support
 - **🔗 Fluent Chainable API**: Intuitive signal processing workflows through `DASFrame`
 - **📊 Professional Signal Processing**: Comprehensive tools including spectral analysis, filtering, integration
 - **📈 Scientific-Grade Visualization**: Multiple plot types including time-domain waveforms, spectra, spectrograms, waterfalls
+- **📏 Unit System**: First-class physical unit support via **Pint** integration
+- **🎲 Built-in Examples**: Easy generation of synthetic data (sine waves, chirps, events) for testing
 - **🎯 High-Performance Design**: Vectorized and parallel computing optimizations for critical algorithms
 
 ## 🚀 Quick Start
@@ -167,7 +169,10 @@ DASMatrix/
 │   └── engine.py         # Computation graph engine
 ├── visualization/         # Visualization module
 │   └── das_visualizer.py # DAS visualization class
+├── units.py               # Unit system (Pint-based)
+├── examples.py            # Example data generation
 └── utils/                 # Utility functions
+    └── time.py           # Time conversion tools
 ```
 
 ## 🔧 Development
@@ -179,6 +184,12 @@ uv sync --dev
 
 # Run tests
 just test
+
+# Run tests
+just test
+
+# Run performance benchmarks
+just benchmark
 
 # Code quality checks
 just check-all
