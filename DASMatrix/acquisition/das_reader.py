@@ -48,71 +48,44 @@ class DataReader(ABC):
             sampling_config: 采样配置对象, 包含采样频率、通道数等信息
         """
         self.sampling_config = sampling_config
+        self.channels = sampling_config.channels
+        self.fs = sampling_config.fs
         self.logger = logging.getLogger(__name__)
 
     @abstractmethod
     def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
-        """读取原始数据
-
-        Args:
-            file_path: 数据文件路径
-            target_col: 目标列索引列表
-
-        Returns:
-            Union[np.ndarray, da.Array]: 读取的原始数据
-        """
+        """读取原始数据"""
         pass
 
     def ValidateFile(self, file_path: Path) -> None:
-        """验证文件是否存在且可读"""
-        if not isinstance(file_path, Path):
-            file_path = Path(file_path)
-
-        if not file_path.exists():
+        """验证文件是否存在"""
+        if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
-
-        if not file_path.is_file():
-            raise ValueError(f"路径不是文件: {file_path}")
-
-        if not os.access(file_path, os.R_OK):
-            raise PermissionError(f"无法读取文件: {file_path}")
 
 
 class DATReader(DataReader):
     """DAT 格式数据读取器 (向后兼容)"""
 
     def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
-        """读取 DAT 格式的原始数据"""
+        """读取 DAT 格式的原始数据 (使用内存映射以支持大文件)"""
         self.ValidateFile(file_path)
 
-        file_info = file_path.stat()
-        byte_count = file_info.st_size
-        row_count = byte_count // (self.sampling_config.channels * 2)
-
-        if row_count <= 0:
-            raise ValueError(f"文件大小异常, 无法读取有效数据: {file_path}")
-
-        dtype = ">i2" if self.sampling_config.byte_order == "big" else "<i2"
-
         try:
-            mmap = np.memmap(
-                str(file_path),
-                dtype=dtype,
-                mode="r",
-                shape=(int(row_count), int(self.sampling_config.channels)),
-            )
+            # 计算总样本数
+            file_size = os.path.getsize(file_path)
+            item_size = np.dtype(np.float32).itemsize
+            total_items = file_size // item_size
+            n_rows = total_items // self.channels
 
-            data = da.from_array(mmap, chunks="auto")
-            data = (data * np.pi) / 2**13
+            data = np.memmap(file_path, dtype=np.float32, mode="r", shape=(n_rows, self.channels))
 
-            if target_col is not None:
+            if target_col:
                 data = data[:, target_col]
 
             return data
-
         except Exception as e:
-            self.logger.error(f"读取 DAT 文件时发生错误: {e}")
-            raise IOError(f"无法读取 DAT 文件: {file_path}") from e
+            self.logger.error(f"读取 DAT 文件失败: {e}")
+            raise
 
 
 class H5Reader(DataReader):
@@ -123,20 +96,22 @@ class H5Reader(DataReader):
         self.ValidateFile(file_path)
 
         try:
-            f = h5py.File(file_path, "r")
-            if "Acquisition/Raw[0]" not in f:
-                f.close()
-                raise KeyError("HDF5 文件中未找到 'Acquisition/Raw[0]' 数据集")
+            with h5py.File(file_path, "r") as f:
+                # 假设数据在 "Data" 或 "DAS" 组下
+                data_key = "Data" if "Data" in f else "DAS"
+                if data_key not in f:
+                    # 尝试查找第一个数据集
+                    for key in f.keys():
+                        if isinstance(f[key], h5py.Dataset):
+                            data_key = key
+                            break
 
-            dataset = f["Acquisition/Raw[0]"]
-            data = da.from_array(dataset, chunks="auto")
-            data = (data / 4) * (np.pi / 2**13)
-
-            if target_col is not None:
-                data = data[:, target_col]
-
-            return data
-
+                dataset = f[data_key]
+                if target_col:
+                    data = dataset[:, target_col]
+                else:
+                    data = dataset[:]
+                return data
         except Exception as e:
             self.logger.error(f"读取 H5 文件时发生错误: {e}")
             raise IOError(f"无法读取 H5 文件: {file_path}") from e
@@ -150,14 +125,12 @@ class SEGYReader(DataReader):
         self.ValidateFile(file_path)
 
         try:
+            # 使用 obspy 读取 SEGY
             st = obspy.read(str(file_path), format="SEGY")
             data = np.stack([tr.data for tr in st], axis=1)
-
-            if target_col is not None:
+            if target_col:
                 data = data[:, target_col]
-
             return data
-
         except Exception as e:
             self.logger.error(f"读取 SEGY 文件时发生错误: {e}")
             raise IOError(f"无法读取 SEGY 文件: {file_path}") from e
@@ -171,22 +144,11 @@ class MiniSEEDReader(DataReader):
         self.ValidateFile(file_path)
 
         try:
-            st = obspy.read(str(file_path), format="MSEED")
-            st.merge(method=1, fill_value="interpolate")
-
-            lens = [len(tr) for tr in st]
-            if len(set(lens)) > 1:
-                min_len = min(lens)
-                self.logger.warning(f"Trace 长度不一致, 裁剪到 {min_len}")
-                data = np.stack([tr.data[:min_len] for tr in st], axis=1)
-            else:
-                data = np.stack([tr.data for tr in st], axis=1)
-
-            if target_col is not None:
+            st = obspy.read(str(file_path))
+            data = np.stack([tr.data for tr in st], axis=1)
+            if target_col:
                 data = data[:, target_col]
-
             return data
-
         except Exception as e:
             self.logger.error(f"读取 MiniSEED 文件时发生错误: {e}")
             raise IOError(f"无法读取 MiniSEED 文件: {file_path}") from e

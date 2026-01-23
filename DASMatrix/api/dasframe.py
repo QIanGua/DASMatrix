@@ -244,6 +244,20 @@ class DASFrame:
 
         return DASFrame(normalized, self._fs, self._dx, **self._metadata)
 
+    def any(self, axis: Optional[Union[int, str]] = None) -> Union[bool, np.ndarray]:
+        """Check if any element is True."""
+        if axis is None:
+            return bool(self._data.any().compute())
+        dim = "time" if axis == 0 or axis == "time" else "distance"
+        return self._data.any(dim=dim).compute().values
+
+    def all(self, axis: Optional[Union[int, str]] = None) -> Union[bool, np.ndarray]:
+        """Check if all elements are True."""
+        if axis is None:
+            return bool(self._data.all().compute())
+        dim = "time" if axis == 0 or axis == "time" else "distance"
+        return self._data.all(dim=dim).compute().values
+
     # --- 统计 (Statistics) ---
     def mean(self, axis: Optional[int] = 0) -> np.ndarray:
         """计算均值。
@@ -277,15 +291,17 @@ class DASFrame:
         dim = "time" if axis == 0 else "distance"
         return self._data.min(dim=dim).compute().values
 
-    def rms(self, window: Optional[int] = None) -> np.ndarray:
+    def rms(self, window: Optional[int] = None) -> Union[np.ndarray, "DASFrame"]:
         """计算 RMS（均方根）。"""
         data_sq = self._data**2
         if window is None:
+            # 返回全局/通道 RMS (Sink)
             return np.sqrt(data_sq.mean(dim="time").compute().values)
         else:
-            # 滑动 RMS，使用 xarray 滚动窗口
+            # 返回滑动 RMS (Lazy Transformation)
             rolling_mean = data_sq.rolling(time=window, center=True).mean()
-            return np.sqrt(rolling_mean.compute().values)
+            rms_data = np.sqrt(rolling_mean)
+            return DASFrame(rms_data, self._fs, self._dx, **self._metadata)
 
     def fft(self) -> "DASFrame":
         """快速傅立叶变换 (Real FFT)，返回单边幅度谱。
@@ -449,12 +465,16 @@ class DASFrame:
         return DASFrame(filtered, self._fs, dx, **self._metadata)
 
     # --- 检测 (Detection) ---
-    def threshold_detect(self, threshold: Optional[float] = None, sigma: float = 3.0) -> np.ndarray:
-        """阈值检测。"""
-        data = self.collect()
+    def threshold_detect(self, threshold: Optional[float] = None, sigma: float = 3.0) -> "DASFrame":
+        """阈值检测。返回包含布尔值的延迟 DASFrame。"""
         if threshold is None:
-            threshold = float(np.mean(data) + sigma * np.std(data))
-        return np.abs(data) > threshold
+            # 计算全局或按通道的统计信息 (这会触发少量计算，但比全量 collect 好)
+            mean_val = self._data.mean()
+            std_val = self._data.std()
+            threshold = float(mean_val.compute() + sigma * std_val.compute())
+
+        detected = np.abs(self._data) > threshold
+        return DASFrame(detected, self._fs, self._dx, **self._metadata)
 
     # --- Visualization ---
 
@@ -507,13 +527,13 @@ class DASFrame:
         **kwargs: Any,
     ) -> plt.Figure:
         """绘制频谱图 (FFT)。"""
-        data = self.collect()
-        ch_data = data[:, ch]
+        # 优化：仅采集特定通道的数据
+        ch_data = self._data.isel(distance=ch).compute().values
 
         from ..visualization.das_visualizer import SpectrumPlot
 
         plotter = SpectrumPlot()
-        # 计算频谱 (Welch 方法)
+        from scipy import signal
 
         n = len(ch_data)
         nperseg = min(2048, n // 4)
@@ -533,8 +553,8 @@ class DASFrame:
         **kwargs: Any,
     ) -> plt.Figure:
         """绘制时频图 (STFT)。"""
-        data = self.collect()
-        ch_data = data[:, ch]
+        # 优化：仅采集特定通道的数据
+        ch_data = self._data.isel(distance=ch).compute().values
 
         from ..visualization.das_visualizer import SpectrogramPlot
 
