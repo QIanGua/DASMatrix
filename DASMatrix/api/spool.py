@@ -1,3 +1,4 @@
+import json
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ class DASSpool:
         self,
         path: Union[str, Path, List[Path]],
         format: Optional[str] = None,
+        cache_path: Optional[Union[str, Path]] = None,
     ):
         """初始化 Spool
 
@@ -37,6 +39,7 @@ class DASSpool:
         # 索引 DataFrame (path, start_time, end_time, n_samples, ...)
         self._index: Optional[pd.DataFrame] = None
 
+        self._cache_path = Path(cache_path) if cache_path else None
         self._resolve_paths(path)
 
     def _resolve_paths(self, path: Union[str, Path, List[Path]]) -> None:
@@ -94,48 +97,121 @@ class DASSpool:
         if not self._files and path:
             warnings.warn(f"No files found for path: {path}")
 
-    def update(self) -> "DASSpool":
-        """更新文件索引 (增量扫描新文件)"""
-        data_list = []
+    def _load_cache(self) -> Tuple[Optional[pd.DataFrame], Dict[Path, FormatMetadata]]:
+        """Load index and metadata cache from disk."""
+        if not self._cache_path or not self._cache_path.exists():
+            return None, {}
 
-        for p in self._files:
-            if p not in self._meta_cache:
-                try:
-                    meta = FormatRegistry.scan(p, format_name=self._format)
-                    self._meta_cache[p] = meta
-                except Exception:
-                    # Skip invalid files or errors during scan
-                    continue
+        try:
+            # Using JSON for metadata cache and Parquet for Index for better performance
+            # Metadata cache contains complex objects (DASInventory), so JSON/Pickle is needed
+            # For now, let's use a simple strategy: all in one directory if cache_path is dir
+            # or just use a single file if it is a file.
 
-            meta = self._meta_cache[p]
-            # Try to parse start time if available
-            start_time = None
-            if meta.start_time:
-                try:
-                    start_time = pd.to_datetime(meta.start_time)
-                except Exception:
+            # Simple approach: If cache_path is a directory, use index.parquet and meta_cache.json
+            index_file = self._cache_path / "index.parquet"
+            meta_file = self._cache_path / "meta_cache.json"
+
+            index_df = None
+            if index_file.exists():
+                index_df = pd.read_parquet(index_file)
+                # Convert path strings back to Path objects
+                index_df["path"] = index_df["path"].apply(Path)
+
+            meta_cache = {}
+            if meta_file.exists():
+                with open(meta_file, "r") as f:
+                    raw_cache = json.load(f)
+                    # We would need to reconstruct FormatMetadata and DASInventory here
+                    # This is complex. For now, let's focus on the index persistence.
                     pass
 
-            # Estimate end time
-            end_time = None
-            if start_time is not None and meta.sampling_rate and meta.n_samples:
-                duration = meta.n_samples / meta.sampling_rate
-                end_time = start_time + pd.Timedelta(seconds=duration)
+            return index_df, meta_cache
+        except Exception as e:
+            warnings.warn(f"加载缓存失败: {e}")
+            return None, {}
 
-            data_list.append(
-                {
-                    "path": p,
-                    "start_time": start_time,
-                    "end_time": end_time,
-                    "n_samples": meta.n_samples,
-                    "n_channels": meta.n_channels,
-                    "sampling_rate": meta.sampling_rate,
-                    "channel_spacing": meta.channel_spacing,
-                }
-            )
+    def _save_cache(self) -> None:
+        """Save index to disk."""
+        if not self._cache_path or self._index is None:
+            return
+
+        try:
+            if not self._cache_path.exists():
+                self._cache_path.mkdir(parents=True)
+
+            index_file = self._cache_path / "index.parquet"
+            # Path objects are not parquet-serializable, convert to strings
+            df_to_save = self._index.copy()
+            df_to_save["path"] = df_to_save["path"].apply(str)
+            df_to_save.to_parquet(index_file)
+
+            # TODO: Persistent metadata cache with DASInventory serialization
+        except Exception as e:
+            warnings.warn(f"保存缓存失败: {e}")
+
+    def update(self, force: bool = False) -> "DASSpool":
+        """更新文件索引 (增量扫描新文件)
+
+        Args:
+            force: 是否强制重新扫描所有文件
+        """
+        if not force and self._index is None and self._cache_path:
+            cached_index, cached_meta = self._load_cache()
+            if cached_index is not None:
+                self._index = cached_index
+                self._meta_cache.update(cached_meta)
+
+        # Identify files that need scanning
+        if force or self._index is None:
+            files_to_scan = self._files
+            data_list = []
+        else:
+            # Incremental update
+            existing_paths = set(self._index["path"].tolist())
+            files_to_scan = [p for p in self._files if p not in existing_paths]
+            data_list = self._index.to_dict("records")
+
+        if not files_to_scan:
+            return self
+
+        for p in files_to_scan:
+            try:
+                meta = FormatRegistry.scan(p, format_name=self._format)
+                self._meta_cache[p] = meta
+
+                start_time = None
+                if meta.start_time:
+                    try:
+                        start_time = pd.to_datetime(meta.start_time)
+                        if start_time.tzinfo is not None:
+                            start_time = start_time.tz_localize(None)
+                    except Exception:
+                        pass
+
+                end_time = None
+                if start_time is not None and meta.sampling_rate and meta.n_samples:
+                    duration = meta.n_samples / meta.sampling_rate
+                    end_time = start_time + pd.Timedelta(seconds=duration)
+
+                data_list.append(
+                    {
+                        "path": p,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "n_samples": meta.n_samples,
+                        "n_channels": meta.n_channels,
+                        "sampling_rate": meta.sampling_rate,
+                        "channel_spacing": meta.channel_spacing,
+                    }
+                )
+            except Exception:
+                continue
 
         if data_list:
             self._index = pd.DataFrame(data_list).sort_values("start_time")
+            if self._cache_path:
+                self._save_cache()
         else:
             self._index = pd.DataFrame(columns=pd.Index(["path", "start_time", "end_time"]))
 

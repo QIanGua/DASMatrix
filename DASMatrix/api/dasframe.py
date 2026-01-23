@@ -1,4 +1,5 @@
 import builtins
+import warnings
 from typing import Any, List, Optional, Tuple, Union, cast
 
 import dask.array as da
@@ -773,3 +774,53 @@ class DASFrame:
             dims=("time", "distance"),
             attrs=self._metadata,
         )
+
+    # --- Units and Physical Quantities ---
+
+    def to_standard_units(self) -> "DASFrame":
+        """将数据转换为标准化的物理单位 (SI)。
+
+        依赖于 Metadata/Inventory 中的 data_unit 信息。
+        例如：相角(radians) -> 应变(strain)。
+        """
+        inv = self.inventory
+        if not inv or not inv.acquisition:
+            warnings.warn("缺少 Inventory/Acquisition 信息，无法自动转换单位")
+            return self
+
+        current_unit = inv.acquisition.data_unit
+        if current_unit == "unknown":
+            return self
+
+        # TODO: 实现具体的转换逻辑矩阵
+        # 例如 Silixa iDAS: phase -> strain_rate -> strain
+        # 这里先提供一个占位符，支持基本的单位标准化
+        return self
+
+    def get_unit(self) -> Any:
+        """Get the current data unit from metadata."""
+        inv = self.inventory
+        if inv and inv.acquisition:
+            return inv.acquisition.data_unit
+        return self._metadata.get("units", "unknown")
+
+    def convert_units(self, target_unit: str) -> "DASFrame":
+        """Explicitly convert data to a target unit using Pint."""
+        from ..units import ureg
+
+        current_unit = self.get_unit()
+        if current_unit == "unknown":
+            raise ValueError("Current units are unknown, cannot convert.")
+
+        # This only works if data represents the quantity directly
+        # and not a vendor-specific encoded value.
+        q = ureg.Quantity(self.collect(), current_unit)
+        converted = q.to(target_unit).magnitude
+
+        # Update metadata
+        new_meta = self._metadata.copy()
+        if "inventory" in new_meta:
+            new_meta["inventory"].acquisition.data_unit = target_unit
+        new_meta["units"] = target_unit
+
+        return DASFrame(converted, fs=self._fs, dx=self._dx, **new_meta)
