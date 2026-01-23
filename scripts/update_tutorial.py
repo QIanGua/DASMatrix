@@ -447,9 +447,7 @@ def create_updated_notebook():
     )
 
     # Section 10: Complete Pipeline
-    add_markdown(
-        ["## 10. 完整处理流程示例\n", "\n", "下面展示一个典型的 DAS 数据处理流程。"]
-    )
+    add_markdown(["## 10. 完整处理流程示例\n", "\n", "下面展示一个典型的 DAS 数据处理流程。"])
     add_code(
         [
             "# 完整的链式处理流程\n",

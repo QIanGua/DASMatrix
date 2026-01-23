@@ -165,8 +165,4 @@ class FormatPlugin(ABC):
         raise NotImplementedError(f"{self.format_name} 格式不支持写入")
 
     def __repr__(self) -> str:
-        return (
-            f"<{self.__class__.__name__} "
-            f"format={self.format_name!r} "
-            f"extensions={self.file_extensions}>"
-        )
+        return f"<{self.__class__.__name__} format={self.format_name!r} extensions={self.file_extensions}>"

@@ -77,9 +77,7 @@ class DASWebDashboard:
             return False
 
         print("⏳ 等待浏览器连接...")
-        future = asyncio.run_coroutine_threadsafe(
-            server.manager.wait_for_client(timeout), server.main_loop
-        )
+        future = asyncio.run_coroutine_threadsafe(server.manager.wait_for_client(timeout), server.main_loop)
         try:
             return future.result(timeout + 5)
         except Exception:
@@ -99,9 +97,7 @@ class DASWebDashboard:
 
         # 提取瀑布图显示的多行数据
         n_samples = chunk.shape[0]
-        buffer_dur = (
-            server.config_state.buffer_duration if server.config_state else 10.0
-        )
+        buffer_dur = server.config_state.buffer_duration if server.config_state else 10.0
         chunk_duration = n_samples / self.fs
         canvas_height = 800
 
@@ -143,9 +139,7 @@ class DASWebDashboard:
 
         # 异步广播消息
         if server.main_loop is not None:
-            asyncio.run_coroutine_threadsafe(
-                server.manager.broadcast(message), server.main_loop
-            )
+            asyncio.run_coroutine_threadsafe(server.manager.broadcast(message), server.main_loop)
         else:
             if int(time.time()) % 5 == 0:
                 print("⚠️ 探测到 Web 服务器尚未完全启动，正在重试...", end="\r")

@@ -152,9 +152,7 @@ class DATFormatPlugin(FormatPlugin):
 
         # 创建坐标
         time_coord = np.arange(data.shape[0]) / fs
-        channel_coord = (
-            list(range(data.shape[1])) if channels is None else list(channels)
-        )
+        channel_coord = list(range(data.shape[1])) if channels is None else list(channels)
 
         # 返回 xr.DataArray
         return xr.DataArray(

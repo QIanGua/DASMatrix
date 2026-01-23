@@ -86,10 +86,7 @@ def _read_h5(path: str, fs: Optional[float] = None, **kwargs):
                     try:
                         # 尝试读取采样率属性或数据
                         fs_data = f[fs_path]
-                        if (
-                            hasattr(fs_data, "attrs")
-                            and "SamplingFrequency" in fs_data.attrs
-                        ):
+                        if hasattr(fs_data, "attrs") and "SamplingFrequency" in fs_data.attrs:
                             detected_fs = float(fs_data.attrs["SamplingFrequency"])
                             break
                         elif isinstance(fs_data, h5py.Dataset):
@@ -176,9 +173,7 @@ def from_array(data: np.ndarray, fs: float, **kwargs: Any) -> "DASFrame":
     return _create_dasframe(data, fs=fs, **kwargs)
 
 
-def stream(
-    url: str, chunk: int = 1024, fs: float = 10000.0, **kwargs: Any
-) -> "DASFrame":
+def stream(url: str, chunk: int = 1024, fs: float = 10000.0, **kwargs: Any) -> "DASFrame":
     """创建用于流式处理的DASFrame。
 
     Args:

@@ -96,9 +96,7 @@ class SourceNode(Node):
         data: 原始输入数据
     """
 
-    def __init__(
-        self, data: Any, name: str = "source", domain: NodeDomain = NodeDomain.GENERIC
-    ) -> None:
+    def __init__(self, data: Any, name: str = "source", domain: NodeDomain = NodeDomain.GENERIC) -> None:
         """初始化数据源节点。
 
         Args:
@@ -163,9 +161,7 @@ class OperationNode(Node):
         Raises:
             NotImplementedError: 始终抛出，提示使用正确的执行方式
         """
-        raise NotImplementedError(
-            "OperationNode should be executed by a Backend/Planner"
-        )
+        raise NotImplementedError("OperationNode should be executed by a Backend/Planner")
 
 
 class FusionNode(Node):
@@ -196,9 +192,7 @@ class FusionNode(Node):
         Raises:
             NotImplementedError: 融合节点必须由 NumbaBackend 编译执行
         """
-        raise NotImplementedError(
-            "FusionNode must be compiled and executed by NumbaBackend"
-        )
+        raise NotImplementedError("FusionNode must be compiled and executed by NumbaBackend")
 
 
 class ComputationGraph:

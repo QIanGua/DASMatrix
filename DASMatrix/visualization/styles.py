@@ -130,9 +130,7 @@ def create_figure(
     if ncols > 1:
         figsize = (figsize[0] * ncols * 0.6, figsize[1])
 
-    fig, axes = plt.subplots(
-        nrows=nrows, ncols=ncols, figsize=figsize, constrained_layout=True, **kwargs
-    )
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize, constrained_layout=True, **kwargs)
 
     # 确保 axes 始终是数组
     if nrows == 1 and ncols == 1:
@@ -440,6 +438,4 @@ def add_significance_bracket(
         linewidth=linewidth,
         clip_on=False,
     )
-    ax.text(
-        (x1 + x2) / 2, y + h, text, ha="center", va="bottom", fontsize=10, color=color
-    )
+    ax.text((x1 + x2) / 2, y + h, text, ha="center", va="bottom", fontsize=10, color=color)

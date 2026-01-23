@@ -21,13 +21,9 @@ class DASProcessor:
         self.logger = logging.getLogger(__name__)
 
         # 预计算高通滤波器系数
-        self.sos_highpass = self._create_filter(
-            cutoff=self.sampling_config.wn, btype="high"
-        )
+        self.sos_highpass = self._create_filter(cutoff=self.sampling_config.wn, btype="high")
 
-    def _create_filter(
-        self, cutoff: Union[float, List[float]], btype: str, order: int = 4
-    ) -> np.ndarray:
+    def _create_filter(self, cutoff: Union[float, List[float]], btype: str, order: int = 4) -> np.ndarray:
         """创建Butterworth滤波器
 
         Args:
@@ -118,9 +114,7 @@ class DASProcessor:
             Dict[str, np.ndarray]: 包含频率('frequencies')和平均幅值('magnitudes')的字典
         """
         if channel_index < 0 or channel_index >= data.shape[1]:
-            raise IndexError(
-                f"通道索引 {channel_index} 超出范围 [0, {data.shape[1] - 1}]"
-            )
+            raise IndexError(f"通道索引 {channel_index} 超出范围 [0, {data.shape[1] - 1}]")
 
         # 提取指定通道的数据
         channel_data = data[:, channel_index]
@@ -209,9 +203,7 @@ class DASProcessor:
         self.logger.debug(f"找到 {len(result)} 个峰值: {result}")
         return result
 
-    def ApplyBandpassFilter(
-        self, data: np.ndarray, low_freq: float, high_freq: float
-    ) -> np.ndarray:
+    def ApplyBandpassFilter(self, data: np.ndarray, low_freq: float, high_freq: float) -> np.ndarray:
         """应用带通滤波器
 
         Args:
@@ -223,9 +215,7 @@ class DASProcessor:
             np.ndarray: 滤波后的数据
         """
         # 设计带通滤波器
-        sos_bandpass = self._create_filter(
-            cutoff=[low_freq, high_freq], btype="bandpass"
-        )
+        sos_bandpass = self._create_filter(cutoff=[low_freq, high_freq], btype="bandpass")
 
         # 应用滤波器
         filtered_data = self.ApplyFilter(data, sos_bandpass)
@@ -263,10 +253,7 @@ class DASProcessor:
                 high_freq = self.fs / 2 - 1e-3  # 避免奈奎斯特频率
 
             if low_freq >= high_freq:
-                self.logger.warning(
-                    f"频率 {freq}Hz 计算出的带宽无效 [{low_freq:.2f}, {high_freq:.2f}]"
-                    f"跳过此频率"
-                )
+                self.logger.warning(f"频率 {freq}Hz 计算出的带宽无效 [{low_freq:.2f}, {high_freq:.2f}]跳过此频率")
                 continue
 
             filtered_data = self.ApplyBandpassFilter(data, low_freq, high_freq)
@@ -282,10 +269,7 @@ class DASProcessor:
             max_response_channel = np.argmax(rms_values)
             peak_response_value = rms_values[max_response_channel]
 
-            self.logger.debug(
-                f"频率 {freq}Hz: 最大响应通道 {max_response_channel}, "
-                f"峰值RMS {peak_response_value:.4f}"
-            )
+            self.logger.debug(f"频率 {freq}Hz: 最大响应通道 {max_response_channel}, 峰值RMS {peak_response_value:.4f}")
 
             analysis_results.append(
                 {
@@ -298,9 +282,7 @@ class DASProcessor:
 
         return analysis_results
 
-    def f_k_transform(
-        self, data: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def f_k_transform(self, data: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """执行二维傅里叶变换 (F-K 变换)
 
         Args:
@@ -320,9 +302,7 @@ class DASProcessor:
 
         # 计算坐标轴
         freqs = np.fft.fftshift(np.fft.fftfreq(nt, 1.0 / self.fs))
-        wavenumbers = np.fft.fftshift(
-            np.fft.fftfreq(nx)
-        )  # 标准化波数，实际波数需除以 d_x
+        wavenumbers = np.fft.fftshift(np.fft.fftfreq(nx))  # 标准化波数，实际波数需除以 d_x
 
         return fk, freqs, wavenumbers
 

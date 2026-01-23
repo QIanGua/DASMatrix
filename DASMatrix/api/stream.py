@@ -89,9 +89,7 @@ class Stream:
             self._run_simulation()
         else:
             # Placeholder for other sources (TCP, ZMQ, etc.)
-            raise NotImplementedError(
-                f"Source type '{self.source}' not yet implemented."
-            )
+            raise NotImplementedError(f"Source type '{self.source}' not yet implemented.")
 
     def _run_simulation(self) -> None:
         """Generate simulated data."""
@@ -101,9 +99,7 @@ class Stream:
             loop_start = time.time()
 
             # Generate random noise chunk
-            chunk_data = np.random.randn(self.chunk_size, self.n_channels).astype(
-                np.float32
-            )
+            chunk_data = np.random.randn(self.chunk_size, self.n_channels).astype(np.float32)
 
             # Add some synthetic events
             if np.random.random() < 0.1:

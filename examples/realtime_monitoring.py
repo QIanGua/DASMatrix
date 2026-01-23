@@ -26,9 +26,7 @@ def process_and_visualize():
 
     # 1. Initialize Visualizer (runs in main thread usually, or separate if using blitting carefully)
     # We use a 2-second rolling window for visualization
-    viz = RealtimeVisualizer(
-        n_channels=N_CHANNELS, duration=2.0, fs=FS, title="Real-time DAS Monitor"
-    )
+    viz = RealtimeVisualizer(n_channels=N_CHANNELS, duration=2.0, fs=FS, title="Real-time DAS Monitor")
 
     # 2. Initialize Stream (Simulated Source)
     stream = Stream(

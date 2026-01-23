@@ -123,107 +123,106 @@ class DASFrame:
     # --- Signal Operations ---
 
     def bandpass(self, low: float, high: float, order: int = 4) -> "DASFrame":
-        """Apply bandpass filter using dask map_overlap or map_blocks."""
+        """Apply bandpass filter.
+
+        Uses dask map_blocks. We ensure time is the core dimension.
+        """
+        from scipy import signal
 
         def _filter_func(block, fs, low, high, order):
+            # block will have shape (..., time) because time is the core dim
             nyq = 0.5 * fs
-            sos = signal.butter(
-                order, [low / nyq, high / nyq], btype="band", output="sos"
-            )
-            # Apply along the last axis (core dimension moved to end by apply_ufunc)
+            sos = signal.butter(order, [low / nyq, high / nyq], btype="band", output="sos")
             return signal.sosfiltfilt(sos, block, axis=-1)
 
-        data_contiguous_time = self._data.chunk({"time": -1})
-
+        # Transpose to ensure time is the last dimension before applying ufunc
+        # This is safer for dask parallelization across other dimensions
+        data = self._data
         filtered = xr.apply_ufunc(
             _filter_func,
-            data_contiguous_time,
+            data,
             kwargs={"fs": self._fs, "low": low, "high": high, "order": order},
             input_core_dims=[["time"]],
             output_core_dims=[["time"]],
             dask="parallelized",
-            output_dtypes=[data_contiguous_time.dtype],
+            output_dtypes=[data.dtype],
         )
 
         return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
     def lowpass(self, cutoff: float, order: int = 4) -> "DASFrame":
         """Apply lowpass filter."""
+        from scipy import signal
 
         def _filter_func(block, fs, cutoff, order):
             nyq = 0.5 * fs
             sos = signal.butter(order, cutoff / nyq, btype="low", output="sos")
             return signal.sosfiltfilt(sos, block, axis=-1)
 
-        data_contiguous_time = self._data.chunk({"time": -1})
         filtered = xr.apply_ufunc(
             _filter_func,
-            data_contiguous_time,
+            self._data,
             kwargs={"fs": self._fs, "cutoff": cutoff, "order": order},
             input_core_dims=[["time"]],
             output_core_dims=[["time"]],
             dask="parallelized",
-            output_dtypes=[data_contiguous_time.dtype],
+            output_dtypes=[self._data.dtype],
         )
         return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
     def highpass(self, cutoff: float, order: int = 4) -> "DASFrame":
-        """高通滤波器。"""
+        """Apply highpass filter."""
+        from scipy import signal
 
         def _filter_func(block, fs, cutoff, order):
             nyq = 0.5 * fs
             sos = signal.butter(order, cutoff / nyq, btype="high", output="sos")
             return signal.sosfiltfilt(sos, block, axis=-1)
 
-        data_contiguous_time = self._data.chunk({"time": -1})
         filtered = xr.apply_ufunc(
             _filter_func,
-            data_contiguous_time,
+            self._data,
             kwargs={"fs": self._fs, "cutoff": cutoff, "order": order},
             input_core_dims=[["time"]],
             output_core_dims=[["time"]],
             dask="parallelized",
-            output_dtypes=[data_contiguous_time.dtype],
+            output_dtypes=[self._data.dtype],
         )
         return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
     def notch(self, freq: float, Q: float = 30) -> "DASFrame":
         """陷波滤波器，移除特定频率成分。"""
+        from scipy import signal
 
         def _filter_func(block, fs, freq, Q):
             b, a = signal.iirnotch(freq, Q, fs)
             return signal.filtfilt(b, a, block, axis=-1)
 
-        data_contiguous_time = self._data.chunk({"time": -1})
         filtered = xr.apply_ufunc(
             _filter_func,
-            data_contiguous_time,
+            self._data,
             kwargs={"fs": self._fs, "freq": freq, "Q": Q},
             input_core_dims=[["time"]],
             output_core_dims=[["time"]],
             dask="parallelized",
-            output_dtypes=[data_contiguous_time.dtype],
+            output_dtypes=[self._data.dtype],
         )
         return DASFrame(filtered, self._fs, self._dx, **self._metadata)
 
     def detrend(self, axis: str = "time") -> "DASFrame":
         """Detrend data."""
+        from scipy import signal
 
         def _detrend_func(data):
             return signal.detrend(data, axis=-1)
 
-        if axis == "time":
-            data = self._data.chunk({"time": -1})
-        else:
-            data = self._data.chunk({"distance": -1})
-
         detrended = xr.apply_ufunc(
             _detrend_func,
-            data,
+            self._data,
             input_core_dims=[[axis]],
             output_core_dims=[[axis]],
             dask="parallelized",
-            output_dtypes=[data.dtype],
+            output_dtypes=[self._data.dtype],
         )
 
         return DASFrame(detrended, self._fs, self._dx, **self._metadata)
@@ -375,33 +374,50 @@ class DASFrame:
         differentiated = differentiated.pad(time=(1, 0), mode="edge")
         return DASFrame(differentiated, self._fs, self._dx, **self._metadata)
 
-    def stft(self, nperseg: int = 256, noverlap: Optional[int] = None) -> "DASFrame":
-        """短时傅立叶变换，进行时频分析。"""
+    def stft(self, nperseg: int = 256, noverlap: Optional[int] = None, window: str = "hann") -> "DASFrame":
+        """短时傅立叶变换，进行时频分析。
+
+        使用 scipy.signal.ShortTimeFFT 替代旧的 stft API。
+        """
+        from scipy.signal import ShortTimeFFT, get_window
+
         if noverlap is None:
             noverlap = nperseg // 2
 
-        data = self.collect()
-        # signal.stft for 2D data with axis=0:
-        # returns f, t, Zxx where Zxx shape is (freq, distance, time)
-        f, t, Zxx = signal.stft(
-            data, fs=self._fs, nperseg=nperseg, noverlap=noverlap, axis=0
+        hop = nperseg - noverlap
+        win = get_window(window, nperseg)
+        SFT = ShortTimeFFT(win, hop=hop, fs=self._fs, scale_to="magnitude")
+
+        def _stft_block(block, sft_obj):
+            # block shape (..., time)
+            # ShortTimeFFT.stft axis=-1 by default
+            Zxx = sft_obj.stft(block)
+            # Zxx shape (..., freq, time_stft)
+            return np.abs(Zxx).astype(np.float32)
+
+        # Get coordinates using ShortTimeFFT properties
+        freqs = SFT.f
+        # We need to know how many time steps ShortTimeFFT will produce for our input length
+        n_t = self._data.sizes["time"]
+        t_coords = SFT.t(n_t)
+
+        stft_data = xr.apply_ufunc(
+            _stft_block,
+            self._data,
+            kwargs={"sft_obj": SFT},
+            input_core_dims=[["time"]],
+            output_core_dims=[["frequency", "time_stft"]],
+            exclude_dims=set(["time"]),
+            dask="parallelized",
+            output_dtypes=[np.float32],
+            dask_gufunc_kwargs={"output_sizes": {"frequency": len(freqs), "time_stft": len(t_coords)}},
         )
 
-        # 将 Zxx 从 (freq, distance, time) 转换为 (freq, time, distance)
-        Zxx_abs = np.abs(Zxx).transpose(0, 2, 1)
+        stft_data = stft_data.rename({"time_stft": "time"})
+        stft_data = stft_data.assign_coords({"frequency": freqs, "time": t_coords, "distance": self._data.distance})
 
-        # 将结果包装回 xr.DataArray
-        stft_data = xr.DataArray(
-            Zxx_abs,
-            dims=("frequency", "time", "distance"),
-            coords={
-                "frequency": f,
-                "time": t,
-                "distance": self._data.distance,
-            },
-            name="stft",
-            attrs=self._data.attrs,
-        )
+        stft_data = stft_data.transpose("frequency", "time", "distance")
+
         return DASFrame(stft_data, self._fs, self._dx, **self._metadata)
 
     def fk_filter(
@@ -421,9 +437,7 @@ class DASFrame:
         return DASFrame(filtered, self._fs, dx, **self._metadata)
 
     # --- 检测 (Detection) ---
-    def threshold_detect(
-        self, threshold: Optional[float] = None, sigma: float = 3.0
-    ) -> np.ndarray:
+    def threshold_detect(self, threshold: Optional[float] = None, sigma: float = 3.0) -> np.ndarray:
         """阈值检测。"""
         data = self.collect()
         if threshold is None:
@@ -480,9 +494,7 @@ class DASFrame:
 
         n = len(ch_data)
         nperseg = min(2048, n // 4)
-        freqs, psd = signal.welch(
-            ch_data, fs=self._fs, nperseg=nperseg, scaling="spectrum"
-        )
+        freqs, psd = signal.welch(ch_data, fs=self._fs, nperseg=nperseg, scaling="spectrum")
         mags = np.sqrt(psd)
 
         fig = plotter.plot(freqs, mags, title=title, ax=ax, **kwargs)
@@ -522,32 +534,26 @@ class DASFrame:
         title: str = "DAS Waterfall",
         cmap: str = "RdBu_r",
         ax: Optional[plt.Axes] = None,
+        max_samples: int = 2000,
         **kwargs: Any,
     ) -> plt.Figure:
         """绘制热图（瀑布图）。
 
-        Args:
-            channels: 通道切片，例如 slice(10, 60, 5)。
-            t_range: 时间样本切片（以样本为单位），例如 slice(0, 1000)。
-            title: 图标题。
-            cmap: 颜色映射。
-            ax: 可选的 matplotlib Axes 对象。
-            **kwargs: 传递给 imshow 的额外参数。
-
-        Returns:
-            matplotlib Figure 对象。
+        具备自动降采样保护功能，防止大数据量导致绘图卡死。
         """
         if t_range is not None or channels is not None:
-            # 提醒用户优先使用 .slice()
             import warnings
 
-            warnings.warn(
-                "Using t_range or channels in plot_heatmap is deprecated. "
-                "Please use .slice() instead."
-            )
+            warnings.warn("Using t_range or channels in plot_heatmap is deprecated. Please use .slice() instead.")
             frame = self.slice(t=t_range or slice(None), x=channels or slice(None))
         else:
             frame = self
+
+        # 自动降采样逻辑 (Plot Protection)
+        nt, nx = frame.shape
+        if nt > max_samples:
+            step = int(np.ceil(nt / max_samples))
+            frame = frame.slice(t=slice(0, nt, step))
 
         data = frame.collect()
 
@@ -558,7 +564,6 @@ class DASFrame:
                 raise ValueError("Provided ax must belong to a figure")
             fig = cast(plt.Figure, ax.figure)
 
-        # 获取绝对坐标边界
         dist_coords = frame._data.distance.values / self._dx
         time_coords = frame._data.time.values
 
@@ -698,9 +703,7 @@ class DASFrame:
         **kwargs: Any,
     ) -> plt.Figure:
         """绘制均值剖面图。"""
-        return self.plot_profile(
-            stat="mean", channels=channels, x_axis=x_axis, **kwargs
-        )
+        return self.plot_profile(stat="mean", channels=channels, x_axis=x_axis, **kwargs)
 
     def plot_std(
         self,

@@ -31,9 +31,7 @@ class NumbaBackend:
         # 2. 获取/编译内核
         kernel_key = self._get_kernel_signature(node)
         if kernel_key not in self._cache:
-            self._cache[kernel_key] = self._compile_kernel(
-                node, has_aux=bool(aux_params)
-            )
+            self._cache[kernel_key] = self._compile_kernel(node, has_aux=bool(aux_params))
 
         kernel_func = self._cache[kernel_key]
 
@@ -50,50 +48,67 @@ class NumbaBackend:
 
         return out
 
-    def _prepare_aux_params(
-        self, node: FusionNode, data: np.ndarray
-    ) -> List[np.ndarray]:
-        """为需要归约的算子准备参数 (如 mean, trend)。"""
-        params = []
+    def _prepare_aux_params(self, node: FusionNode, data: np.ndarray) -> List[np.ndarray]:
+        """使用 Numba 加速的统计预计算。"""
         n_samples, n_channels = data.shape
+        params = []
 
-        for op in node.fused_nodes:
-            if op.operation == "detrend":
-                # Linear Detrend: y = kx + b
-                # axis=time (0)
-                # 预计算每个通道的 slope (k) 和 intercept (b)
-                # 使用 numpy.polyfit 或简单的线性回归公式
-                # x = np.arange(n_samples)
-                # 简单实现：
-                x = np.arange(n_samples, dtype=data.dtype)
-                # 批量计算 (n_samples, n_channels)
-                # k = cov(x, y) / var(x)
-                # b = mean(y) - k * mean(x)
+        # 检查是否需要统计信息
+        needs_detrend = any(op.operation == "detrend" for op in node.fused_nodes)
+        needs_demean = any(op.operation == "demean" for op in node.fused_nodes)
 
-                # 优化: x 的 mean 和 var 是常数
-                x_mean = np.mean(x)
-                x_var_sum = np.sum((x - x_mean) ** 2)
-
-                y_mean = np.mean(data, axis=0)
-                # xy_cov_sum = np.sum((x - x_mean)[:, None] * (data - y_mean), axis=0)
-                # Faster: dot product
-
-                # X_centered shape: (N,)
-                x_centered = x - x_mean
-                # Data shape: (N, C)
-                # k = (x_c . y) / sum_sq_x
-
-                k = np.dot(x_centered, data) / x_var_sum  # (C,)
-                b = y_mean - k * x_mean
-
-                params.append(k.astype(data.dtype))
-                params.append(b.astype(data.dtype))
-
-            elif op.operation == "demean":
-                means = np.mean(data, axis=0)
-                params.append(means.astype(data.dtype))
+        if needs_detrend or needs_demean:
+            # 调用高性能 JIT 辅助函数
+            return self._compute_stats_numba(data, needs_detrend, needs_demean)
 
         return params
+
+    @staticmethod
+    @numba.njit(parallel=True, fastmath=True)
+    def _compute_stats_numba(data, compute_detrend: bool, compute_demean: bool):
+        n_samples, n_channels = data.shape
+        dtype = data.dtype
+
+        results = []
+
+        if compute_detrend:
+            # 一次遍历计算 sum_y 和 sum_xy
+            # x = [0, 1, 2, ..., n-1]
+            # sum_x = n(n-1)/2, sum_x2 = n(n-1)(2n-1)/6
+            n = n_samples
+            sum_x = n * (n - 1) / 2
+            sum_x2 = n * (n - 1) * (2 * n - 1) / 6
+            denom = n * sum_x2 - sum_x**2
+
+            ks = np.zeros(n_channels, dtype=dtype)
+            bs = np.zeros(n_channels, dtype=dtype)
+
+            for j in numba.prange(n_channels):
+                s_y = 0.0
+                s_xy = 0.0
+                for i in range(n_samples):
+                    val = data[i, j]
+                    s_y += val
+                    s_xy += i * val
+
+                k = (n * s_xy - sum_x * s_y) / denom
+                b = (s_y - k * sum_x) / n
+                ks[j] = k
+                bs[j] = b
+
+            results.append(ks)
+            results.append(bs)
+
+        elif compute_demean:
+            means = np.zeros(n_channels, dtype=dtype)
+            for j in numba.prange(n_channels):
+                s_y = 0.0
+                for i in range(n_samples):
+                    s_y += data[i, j]
+                means[j] = s_y / n_samples
+            results.append(means)
+
+        return results
 
     def _get_kernel_signature(self, node: FusionNode) -> str:
         sig = "fuse"

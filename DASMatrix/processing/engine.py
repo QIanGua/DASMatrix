@@ -142,9 +142,7 @@ class HybridEngine:
             order = kwargs.get("order", 4)
             fs = kwargs.get("fs", 1000)
             nyq = fs / 2
-            sos = scipy_signal.butter(
-                order, [low / nyq, high / nyq], btype="band", output="sos"
-            )
+            sos = scipy_signal.butter(order, [low / nyq, high / nyq], btype="band", output="sos")
             return scipy_signal.sosfiltfilt(sos, data, axis=0)
 
         elif op == "lowpass":
@@ -192,9 +190,7 @@ class HybridEngine:
             results = []
             for ch in range(n_channels):
                 ch_data = data[:, ch] if data.ndim > 1 else data
-                f, t, Zxx = scipy_signal.stft(
-                    ch_data, fs=fs, nperseg=nperseg, noverlap=noverlap
-                )
+                f, t, Zxx = scipy_signal.stft(ch_data, fs=fs, nperseg=nperseg, noverlap=noverlap)
                 results.append(np.abs(Zxx))
             # 返回 (freq, time, channel)
             return np.stack(results, axis=-1)

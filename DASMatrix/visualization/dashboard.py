@@ -234,20 +234,14 @@ class DASDashboard:
         # --- 3. 趋势指标面板 ---
         self.ax_metrics = self.fig.add_subplot(gs[1, 1])
         setup_axis(self.ax_metrics, xlabel=self._t("time"), title=self._t("metrics"))
-        (self.line_max,) = self.ax_metrics.plot(
-            [], [], color=self.colors["accent_1"], lw=1.5, label="Max"
-        )
-        (self.line_rms,) = self.ax_metrics.plot(
-            [], [], color=self.colors["accent_2"], lw=1.5, label="RMS"
-        )
+        (self.line_max,) = self.ax_metrics.plot([], [], color=self.colors["accent_1"], lw=1.5, label="Max")
+        (self.line_rms,) = self.ax_metrics.plot([], [], color=self.colors["accent_2"], lw=1.5, label="RMS")
         self.ax_metrics.legend(loc="upper left", fontsize=7, frameon=False)
 
         # --- 4. 焦点通道细节图 ---
         self.ax_detail = self.fig.add_subplot(gs[2, 1])
         setup_axis(self.ax_detail, title=self._t("ch_detail", ch=self.focus_channel))
-        (self.line_detail,) = self.ax_detail.plot(
-            [], [], color=self.colors["accent_1"], lw=0.8
-        )
+        (self.line_detail,) = self.ax_detail.plot([], [], color=self.colors["accent_1"], lw=0.8)
 
         # --- 5. 事件日志与系统统计 ---
         self.ax_info = self.fig.add_subplot(gs[3, 1])
@@ -282,9 +276,7 @@ class DASDashboard:
         if n_samples >= self.n_samples_buffer:
             self.data_buffer = chunk[-self.n_samples_buffer :].astype(np.float64)
         else:
-            self.data_buffer = np.roll(self.data_buffer, -n_samples, axis=0).astype(
-                np.float64
-            )
+            self.data_buffer = np.roll(self.data_buffer, -n_samples, axis=0).astype(np.float64)
             self.data_buffer[-n_samples:] = chunk
 
         # 1. 更新瀑布图
@@ -316,9 +308,7 @@ class DASDashboard:
         t_detail = np.linspace(0, n_samples / self.fs, n_samples)
         self.line_detail.set_data(t_detail, focus_data)
         self.ax_detail.set_xlim(0, t_detail[-1])
-        self.ax_detail.set_ylim(
-            np.min(focus_data) * 1.2, np.max(focus_data) * 1.2 + 0.01
-        )
+        self.ax_detail.set_ylim(np.min(focus_data) * 1.2, np.max(focus_data) * 1.2 + 0.01)
 
         # 4. 更新状态与日志
         state = "active"

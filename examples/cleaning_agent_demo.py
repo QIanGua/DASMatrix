@@ -72,9 +72,7 @@ def demo_cleaning_workflow():
     # 模拟 Agent 思考
     print("\n🤖 Agent 思考: 发现明显趋势项 (has_trend=True) 和 50Hz 干扰。")
     print("              存在坏道 (Idx: 10, 20)。")
-    print(
-        "              建议方案: 使用 standard_denoise 去除趋势，额外添加 50Hz 滤波。"
-    )
+    print("              建议方案: 使用 standard_denoise 去除趋势，额外添加 50Hz 滤波。")
 
     # 3. 治疗 (Treatment)
     print("\n[Step 3] 执行清洗...")

@@ -48,9 +48,10 @@ packages = [
 ]
 
 [tool.ruff]
-line-length = 88 # 示例配置
+line-length = 120 # 示例配置
 
 [tool.ruff.lint]
+ignore = ["E501", "F841"]
 select = [
     "E",
     "F",
@@ -80,8 +81,17 @@ dev = [
 ]
 
 [tool.mypy]
+# 核心设置：保持基本严谨
 no_implicit_optional = true
 check_untyped_defs = true
+
+# 渐进式检查：放宽开发阶段的限制，避免过度干扰
+disallow_untyped_defs = false    # 允许不标注函数返回类型
+warn_return_any = false         # 允许返回 Any 类型，减少琐碎报错
+ignore_missing_imports = true   # 全局忽略缺失的第三方库类型存根
+
+# 排除不需要检查的目录
+exclude = ["venv", ".venv", "tests/"]
 
 [[tool.mypy.overrides]]
 module = [

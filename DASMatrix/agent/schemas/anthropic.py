@@ -228,9 +228,7 @@ ANTHROPIC_TOOL_SCHEMAS: List[Dict[str, Any]] = [
         "description": "删除指定的数据对象以释放内存。",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "data_id": {"type": "string", "description": "要删除的对象 ID"}
-            },
+            "properties": {"data_id": {"type": "string", "description": "要删除的对象 ID"}},
             "required": ["data_id"],
         },
     },

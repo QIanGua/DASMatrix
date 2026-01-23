@@ -192,11 +192,7 @@ class PRODMLFormatPlugin(FormatPlugin):
                     "channel_spacing": dx,
                     "format": self.format_name,
                     "source_file": str(path),
-                    **{
-                        k: v
-                        for k, v in attrs.items()
-                        if isinstance(v, (int, float, str))
-                    },
+                    **{k: v for k, v in attrs.items() if isinstance(v, (int, float, str))},
                 },
             )
 

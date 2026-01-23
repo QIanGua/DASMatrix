@@ -137,9 +137,7 @@ class DASSpool:
         if data_list:
             self._index = pd.DataFrame(data_list).sort_values("start_time")
         else:
-            self._index = pd.DataFrame(
-                columns=pd.Index(["path", "start_time", "end_time"])
-            )
+            self._index = pd.DataFrame(columns=pd.Index(["path", "start_time", "end_time"]))
 
         return self
 

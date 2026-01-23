@@ -62,8 +62,7 @@ def to_datetime64(
         return np.datetime64(ns_value, "ns")  # type: ignore
 
     raise TypeError(
-        f"Cannot convert {type(value).__name__} to datetime64. "
-        "Expected str, int, float, datetime, or np.datetime64."
+        f"Cannot convert {type(value).__name__} to datetime64. Expected str, int, float, datetime, or np.datetime64."
     )
 
 
@@ -113,8 +112,7 @@ def to_timedelta64(
         return _create_timedelta(value, unit)
 
     raise TypeError(
-        f"Cannot convert {type(value).__name__} to timedelta64. "
-        "Expected str, int, float, timedelta, or np.timedelta64."
+        f"Cannot convert {type(value).__name__} to timedelta64. Expected str, int, float, timedelta, or np.timedelta64."
     )
 
 
@@ -166,10 +164,7 @@ def to_float(
         seconds = float(ns_value) * 1e-9
         return seconds / unit_factors[unit] * unit_factors["s"]
 
-    raise TypeError(
-        f"Cannot convert {type(value).__name__} to float. "
-        "Expected np.datetime64 or np.timedelta64."
-    )
+    raise TypeError(f"Cannot convert {type(value).__name__} to float. Expected np.datetime64 or np.timedelta64.")
 
 
 def _parse_timedelta_string(s: str) -> np.timedelta64:
@@ -213,10 +208,7 @@ def _parse_timedelta_string(s: str) -> np.timedelta64:
     except ValueError:
         pass
 
-    raise ValueError(
-        f"Cannot parse '{s}' as timedelta. "
-        "Expected format like '10s', '1.5h', '500ms'."
-    )
+    raise ValueError(f"Cannot parse '{s}' as timedelta. Expected format like '10s', '1.5h', '500ms'.")
 
 
 def _create_timedelta(value: float, unit: str) -> np.timedelta64:

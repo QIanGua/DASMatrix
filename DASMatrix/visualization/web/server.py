@@ -54,9 +54,7 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
             if len(self.active_connections) == 0:
                 self._connected_event.clear()
-            print(
-                f"🔌 浏览器已断开 WebSocket. 剩余活跃数: {len(self.active_connections)}"
-            )
+            print(f"🔌 浏览器已断开 WebSocket. 剩余活跃数: {len(self.active_connections)}")
 
     async def wait_for_client(self, timeout: float = 30.0) -> bool:
         """等待至少一个客户端连接"""
@@ -147,9 +145,7 @@ async def start_server(host: str, port: int):
     import uvicorn
 
     # 改为 info 级别以便观察连接
-    config = uvicorn.Config(
-        app, host=host, port=port, log_level="info", access_log=True
-    )
+    config = uvicorn.Config(app, host=host, port=port, log_level="info", access_log=True)
     server = uvicorn.Server(config)
     await server.serve()
 
@@ -157,8 +153,6 @@ async def start_server(host: str, port: int):
 def run_in_background(host: str, port: int):
     import threading
 
-    thread = threading.Thread(
-        target=lambda: asyncio.run(start_server(host, port)), daemon=True
-    )
+    thread = threading.Thread(target=lambda: asyncio.run(start_server(host, port)), daemon=True)
     thread.start()
     return thread

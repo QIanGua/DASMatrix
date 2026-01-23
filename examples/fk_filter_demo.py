@@ -138,12 +138,8 @@ def demo_fk_filter():
     ch = 64
     t = np.arange(data.shape[0]) / fs
     axes[1, 1].plot(t, data[:, ch], "k-", alpha=0.5, label="原始", linewidth=0.8)
-    axes[1, 1].plot(
-        t, fast_data[:, ch], "b-", label="快速波", linewidth=config.line_width
-    )
-    axes[1, 1].plot(
-        t, slow_data[:, ch], "r-", label="慢速波", linewidth=config.line_width
-    )
+    axes[1, 1].plot(t, fast_data[:, ch], "b-", label="快速波", linewidth=config.line_width)
+    axes[1, 1].plot(t, slow_data[:, ch], "r-", label="慢速波", linewidth=config.line_width)
     axes[1, 1].set_title(f"通道 {ch} 波形对比", fontweight="bold")
     axes[1, 1].set_xlabel("Time (s)")
     axes[1, 1].set_ylabel("Amplitude")

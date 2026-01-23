@@ -46,9 +46,7 @@ class RealtimeVisualizer:
 
         # Setup plot
         apply_nature_style()
-        self.fig, self.axes = plt.subplots(
-            2, 1, figsize=figsize, constrained_layout=True
-        )
+        self.fig, self.axes = plt.subplots(2, 1, figsize=figsize, constrained_layout=True)
         self.ax_heatmap: Axes = self.axes[0]
         self.ax_line: Axes = self.axes[1]
 

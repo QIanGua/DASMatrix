@@ -41,9 +41,7 @@ def create_demo_data() -> Path:
         if 40 <= ch <= 60:
             event_start = int(2.5 * fs)  # 2.5 秒处
             event_duration = int(0.2 * fs)  # 0.2 秒
-            signal[event_start : event_start + event_duration] += 2 * np.sin(
-                2 * np.pi * 100 * t[:event_duration]
-            )
+            signal[event_start : event_start + event_duration] += 2 * np.sin(2 * np.pi * 100 * t[:event_duration])
         data[:, ch] = signal
 
     # 保存为 HDF5
@@ -114,15 +112,12 @@ def demo_tool_execution():
     print(f"   检测到事件数: {events['events_detected']}")
     for i, event in enumerate(events["events"][:3]):
         print(
-            f"   事件 {i+1}: {event['start_time_s']:.3f}s - {event['end_time_s']:.3f}s "
-            f"({event['duration_ms']:.1f}ms)"
+            f"   事件 {i + 1}: {event['start_time_s']:.3f}s - {event['end_time_s']:.3f}s ({event['duration_ms']:.1f}ms)"
         )
 
     # 6. 可视化
     print("\n🎨 步骤 6: 生成可视化")
-    viz = tools.create_visualization(
-        data_id, plot_type="waterfall", output_path="/tmp/das_demo_waterfall.png"
-    )
+    viz = tools.create_visualization(data_id, plot_type="waterfall", output_path="/tmp/das_demo_waterfall.png")
     print(f"   图表类型: {viz['plot_type']}")
     print(f"   保存路径: {viz['output_path']}")
 
@@ -156,10 +151,7 @@ def demo_simulated_agent_conversation():
     tool_schemas = get_openai_tools()
     print(f"\n📚 已注册 {len(tool_schemas)} 个工具:")
     for schema in tool_schemas:
-        print(
-            f"   - {schema['function']['name']}: "
-            f"{schema['function']['description'][:50]}..."
-        )
+        print(f"   - {schema['function']['name']}: {schema['function']['description'][:50]}...")
 
     # 模拟用户对话
     conversations = [
@@ -209,11 +201,7 @@ def demo_simulated_agent_conversation():
         # 替换 DATA_ID 占位符
         # 替换 DATA_ID 占位符
         tool_call = conv["tool_call"]
-        if (
-            not isinstance(tool_call, dict)
-            or "arguments" not in tool_call
-            or "name" not in tool_call
-        ):
+        if not isinstance(tool_call, dict) or "arguments" not in tool_call or "name" not in tool_call:
             continue
 
         args = tool_call["arguments"]
@@ -245,25 +233,13 @@ def demo_simulated_agent_conversation():
         print(f"   结果: {json.dumps(result, indent=2, ensure_ascii=False)[:200]}...")
 
         if tool_name == "read_das_data":
-            print(
-                f"🤖 Agent: 已成功读取数据，共 {result['n_channels']} 个通道，"
-                f"时长 {result['duration']:.1f} 秒。"
-            )
+            print(f"🤖 Agent: 已成功读取数据，共 {result['n_channels']} 个通道，时长 {result['duration']:.1f} 秒。")
         elif tool_name == "process_signal":
-            print(
-                f"🤖 Agent: 已完成滤波处理，"
-                f"应用了 {result['operations_applied']} 个操作。"
-            )
+            print(f"🤖 Agent: 已完成滤波处理，应用了 {result['operations_applied']} 个操作。")
         elif tool_name == "compute_spectrum":
-            print(
-                f"🤖 Agent: 频谱分析完成，主导频率为 "
-                f"{result['dominant_frequency_hz']:.1f} Hz。"
-            )
+            print(f"🤖 Agent: 频谱分析完成，主导频率为 {result['dominant_frequency_hz']:.1f} Hz。")
         elif tool_name == "create_visualization":
-            print(
-                f"🤖 Agent: 已生成{result['plot_type']}图，"
-                f"保存在 {result['output_path']}"
-            )
+            print(f"🤖 Agent: 已生成{result['plot_type']}图，保存在 {result['output_path']}")
 
         print()
 

@@ -79,15 +79,11 @@ def assess_data_quality(session: Any, data_id: str) -> Dict[str, Any]:
         "clipping_ratio": float(clipping_ratio),
         "rms_level": float(np.sqrt(np.mean(arr**2))),
         "noise_floor_db": float(20 * np.log10(safe_bg + 1e-10)),
-        "snr_estimate_db": float(20 * np.log10(np.max(spec) / safe_bg))
-        if safe_bg > 0
-        else 0.0,
+        "snr_estimate_db": float(20 * np.log10(np.max(spec) / safe_bg)) if safe_bg > 0 else 0.0,
     }
 
 
-def apply_cleaning_recipe(
-    session: Any, data_id: str, recipe_name: str
-) -> Dict[str, Any]:
+def apply_cleaning_recipe(session: Any, data_id: str, recipe_name: str) -> Dict[str, Any]:
     """应用预定义的清洗套餐。
 
     Args:
@@ -125,9 +121,7 @@ def apply_cleaning_recipe(
     }
 
     if recipe_name not in recipes:
-        raise ValueError(
-            f"Unknown recipe: {recipe_name}. Available: {list(recipes.keys())}"
-        )
+        raise ValueError(f"Unknown recipe: {recipe_name}. Available: {list(recipes.keys())}")
 
     operations = recipes[recipe_name]
 

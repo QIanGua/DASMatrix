@@ -14,9 +14,7 @@ def verify_integrated_plots():
     data = np.random.randn(n_samples, n_channels)
 
     # 在 20-40 通道添加一些显著信号
-    data[:, 20:40] += (
-        5.0 * np.sin(2 * np.pi * 50 * np.linspace(0, 2, n_samples))[:, np.newaxis]
-    )
+    data[:, 20:40] += 5.0 * np.sin(2 * np.pi * 50 * np.linspace(0, 2, n_samples))[:, np.newaxis]
 
     # 2. 创建 DASFrame
     frame = df.from_array(data, fs=fs, dx=1.0)

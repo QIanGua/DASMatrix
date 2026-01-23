@@ -143,9 +143,7 @@ class PlotBase(ABC):
         # 关闭这个示例图形，避免影响后续绘图
         plt.close(fig)
 
-    def save_figure(
-        self, file_path: Union[str, Path], close_after_save: bool = True
-    ) -> None:
+    def save_figure(self, file_path: Union[str, Path], close_after_save: bool = True) -> None:
         """保存图形到指定路径
 
         Args:
@@ -283,9 +281,7 @@ class SpectrumPlot(PlotBase):
                     textcoords="offset points",
                     fontsize=9,
                     fontweight="bold",
-                    bbox=dict(
-                        boxstyle="round,pad=0.3", fc="white", ec="black", alpha=0.9
-                    ),
+                    bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", alpha=0.9),
                 )
 
         # 标记激励频率 - 只在确实需要时执行
@@ -295,9 +291,7 @@ class SpectrumPlot(PlotBase):
             window_size = min(data_range * 0.4, excitation_freq * 0.6)
 
             # 性能优化：避免多次调用set_xlim
-            ax.set_xlim(
-                max(0, excitation_freq - window_size), excitation_freq + window_size
-            )
+            ax.set_xlim(max(0, excitation_freq - window_size), excitation_freq + window_size)
 
             # 添加垂直线标记激励频率
             ax.axvline(
@@ -319,9 +313,7 @@ class SpectrumPlot(PlotBase):
         # 改善x轴刻度格式 - 简化刻度处理
         if max(frequencies) > 1000:
             ax.xaxis.set_major_formatter(
-                ticker.FuncFormatter(
-                    lambda x, pos: f"{x / 1000:.0f}" if x >= 1000 else f"{x:.0f}"
-                )
+                ticker.FuncFormatter(lambda x, pos: f"{x / 1000:.0f}" if x >= 1000 else f"{x:.0f}")
             )
             ax.set_xlabel("Frequency (kHz)")
         else:
@@ -331,9 +323,7 @@ class SpectrumPlot(PlotBase):
 
         # 图例设置（如果有需要的话）
         if (excitation_freq is not None or peaks) and ax.get_legend_handles_labels()[0]:
-            leg = ax.legend(
-                loc="best", frameon=True, framealpha=0.9, fontsize=9, edgecolor="black"
-            )
+            leg = ax.legend(loc="best", frameon=True, framealpha=0.9, fontsize=9, edgecolor="black")
             # 简化图例样式设置
             for line in leg.get_lines():
                 line.set_linewidth(2.0)
@@ -342,9 +332,7 @@ class SpectrumPlot(PlotBase):
         if title:
             plot_title = title
         elif excitation_freq and channel_id is not None:
-            plot_title = (
-                f"Spectrum for Channel {channel_id} around {excitation_freq:.1f} Hz"
-            )
+            plot_title = f"Spectrum for Channel {channel_id} around {excitation_freq:.1f} Hz"
         elif excitation_freq:
             plot_title = f"Spectrum around {excitation_freq:.1f} Hz"
         elif channel_id is not None:
@@ -499,18 +487,14 @@ class WaveformPlot(PlotBase):
                     ha="center",
                     fontsize=9,
                     fontweight="bold",
-                    bbox=dict(
-                        boxstyle="round,pad=0.2", fc="white", ec="gray", alpha=0.8
-                    ),
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="gray", alpha=0.8),
                 )
 
         # 设置网格 - 简化网格样式
         ax.grid(True, which="major", linestyle="--", alpha=0.4, zorder=1)
 
         # 计算并标记零线
-        ax.axhline(
-            y=0, color="black", linestyle="-", linewidth=0.8, alpha=0.5, zorder=3
-        )
+        ax.axhline(y=0, color="black", linestyle="-", linewidth=0.8, alpha=0.5, zorder=3)
 
         # 设置y轴范围
         if amplitude_range is not None:
@@ -523,9 +507,7 @@ class WaveformPlot(PlotBase):
             ax.set_ylim(y_min - 0.1 * y_range, y_max + 0.1 * y_range)
 
         # 设置x轴范围（如果提供了time_range但没有过滤数据）
-        if time_range is not None and not (
-            time_data[0] >= time_range[0] and time_data[-1] <= time_range[1]
-        ):
+        if time_range is not None and not (time_data[0] >= time_range[0] and time_data[-1] <= time_range[1]):
             ax.set_xlim(time_range)
 
         # 优化坐标轴
@@ -536,11 +518,7 @@ class WaveformPlot(PlotBase):
         if max(plot_time_data) - min(plot_time_data) > 60:
             # 超过60秒，以分:秒显示
             ax.xaxis.set_major_formatter(
-                ticker.FuncFormatter(
-                    lambda x, pos: f"{int(x / 60)}:{int(x % 60):02d}"
-                    if x >= 60
-                    else f"{int(x)}"
-                )
+                ticker.FuncFormatter(lambda x, pos: f"{int(x / 60)}:{int(x % 60):02d}" if x >= 60 else f"{int(x)}")
             )
             ax.set_xlabel("Time (min:sec)")
 
@@ -678,9 +656,7 @@ class SpectrogramPlot(PlotBase):
         # 美化频率轴格式 - 简化格式设置
         if max(f) > 1000:
             ax.yaxis.set_major_formatter(
-                ticker.FuncFormatter(
-                    lambda y, pos: f"{y / 1000:.1f}" if y >= 1000 else f"{y:.0f}"
-                )
+                ticker.FuncFormatter(lambda y, pos: f"{y / 1000:.1f}" if y >= 1000 else f"{y:.0f}")
             )
             ax.set_ylabel("Frequency (kHz)")
         else:
@@ -689,11 +665,7 @@ class SpectrogramPlot(PlotBase):
         # 设置时间刻度格式 - 简化格式设置
         if max(t) > 60:
             ax.xaxis.set_major_formatter(
-                ticker.FuncFormatter(
-                    lambda x, pos: f"{int(x / 60)}:{int(x % 60):02d}"
-                    if x >= 60
-                    else f"{int(x)}"
-                )
+                ticker.FuncFormatter(lambda x, pos: f"{int(x / 60)}:{int(x % 60):02d}" if x >= 60 else f"{int(x)}")
             )
             ax.set_xlabel("Time (min:sec)")
         else:
@@ -798,9 +770,7 @@ class WaterfallPlot(PlotBase):
             if len(x_ticks) >= data.shape[1]:
                 x_tick_labels = x_ticks[: data.shape[1]]
                 # 减少显示的刻度数量，避免拥挤
-                tick_indices = np.linspace(
-                    0, len(x_tick_labels) - 1, min(10, len(x_tick_labels)), dtype=int
-                )
+                tick_indices = np.linspace(0, len(x_tick_labels) - 1, min(10, len(x_tick_labels)), dtype=int)
                 ax.set_xticks(tick_indices)
                 ax.set_xticklabels([f"{x_tick_labels[i]:.0f}" for i in tick_indices])
 
@@ -811,9 +781,7 @@ class WaterfallPlot(PlotBase):
             if len(y_ticks) >= data.shape[0]:
                 y_tick_labels = y_ticks[: data.shape[0]]
                 # 减少显示的刻度数量，避免拥挤
-                tick_indices = np.linspace(
-                    0, len(y_tick_labels) - 1, min(10, len(y_tick_labels)), dtype=int
-                )
+                tick_indices = np.linspace(0, len(y_tick_labels) - 1, min(10, len(y_tick_labels)), dtype=int)
                 ax.set_yticks(tick_indices)
                 ax.set_yticklabels([f"{y_tick_labels[i]:.1f}" for i in tick_indices])
         else:
@@ -832,10 +800,7 @@ class WaterfallPlot(PlotBase):
                 if max(time_values) > 60:
                     # 如果时间超过60秒，使用分:秒格式
                     ax.set_yticklabels(
-                        [
-                            f"{int(time_values[i] / 60)}:{int(time_values[i] % 60):02d}"
-                            for i in tick_indices
-                        ]
+                        [f"{int(time_values[i] / 60)}:{int(time_values[i] % 60):02d}" for i in tick_indices]
                     )
                     y_label = "Time (min:sec)"
                 else:
@@ -882,9 +847,7 @@ class DASVisualizer:
             sampling_frequency: 采样频率 (Hz)
             config: 可视化配置，若未指定则使用默认配置
         """
-        self.output_path = (
-            Path(output_path) if isinstance(output_path, str) else output_path
-        )
+        self.output_path = Path(output_path) if isinstance(output_path, str) else output_path
         self.output_path.mkdir(parents=True, exist_ok=True)
         self.fs = sampling_frequency
         self.config = config or VisualizationConfig()
@@ -966,9 +929,7 @@ class DASVisualizer:
             return None
 
         if not isinstance(amplitude_data, np.ndarray) or amplitude_data.ndim != 1:
-            self.logger.error(
-                f"数据必须是一维numpy数组，当前维度: {amplitude_data.ndim}"
-            )
+            self.logger.error(f"数据必须是一维numpy数组，当前维度: {amplitude_data.ndim}")
             return None
 
         # 绘图前启用agg后端可以提高非交互式绘图性能

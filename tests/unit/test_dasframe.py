@@ -106,11 +106,7 @@ class TestDASFrameFiltering:
         """创建包含多频率成分的测试数据"""
         t = np.linspace(0, 1, 10000)
         # 50Hz + 150Hz + 300Hz
-        data = (
-            np.sin(2 * np.pi * 50 * t)
-            + 0.5 * np.sin(2 * np.pi * 150 * t)
-            + 0.3 * np.sin(2 * np.pi * 300 * t)
-        )
+        data = np.sin(2 * np.pi * 50 * t) + 0.5 * np.sin(2 * np.pi * 150 * t) + 0.3 * np.sin(2 * np.pi * 300 * t)
         data = data.reshape(-1, 1)
         return DASFrame(data, fs=10000)
 

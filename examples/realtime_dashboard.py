@@ -22,11 +22,7 @@ def simulate_stream_chunk(fs=1000, n_channels=128, chunk_duration=0.2):
         center_ch = np.random.randint(20, n_channels - 20)
         t = np.linspace(0, chunk_duration, n_samples)
         # 50Hz 信号
-        signal = (
-            5.0
-            * np.sin(2 * np.pi * 50 * t)
-            * np.exp(-10 * (t - chunk_duration / 2) ** 2)
-        )
+        signal = 5.0 * np.sin(2 * np.pi * 50 * t) * np.exp(-10 * (t - chunk_duration / 2) ** 2)
 
         for i in range(-5, 6):
             ch = center_ch + i
@@ -77,9 +73,7 @@ def run_dashboard_demo(duration=30.0, lang="cn", focus_channel=64, open_browser=
 
             # 显式计算以获取处理后的数据块和检测结果
             processed_data = processed_frame.collect()
-            events = processed_frame.threshold_detect(
-                sigma=2.0
-            )  # 进一步降低阈值确保日志触发
+            events = processed_frame.threshold_detect(sigma=2.0)  # 进一步降低阈值确保日志触发
 
             # 3. 更新仪表盘
             # 推送处理后的数据，确保 Max/RMS 数值与波形一致
@@ -112,16 +106,10 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="DASMatrix Premium Dashboard Demo")
-    parser.add_argument(
-        "--duration", type=float, default=30.0, help="Demo duration in seconds"
-    )
-    parser.add_argument(
-        "--lang", type=str, default="cn", choices=["cn", "en"], help="Display language"
-    )
+    parser.add_argument("--duration", type=float, default=30.0, help="Demo duration in seconds")
+    parser.add_argument("--lang", type=str, default="cn", choices=["cn", "en"], help="Display language")
     parser.add_argument("--ch", type=int, default=64, help="Focus channel index")
-    parser.add_argument(
-        "--no-browser", action="store_true", help="Do not open browser automatically"
-    )
+    parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically")
 
     args = parser.parse_args()
     run_dashboard_demo(

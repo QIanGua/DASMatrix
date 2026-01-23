@@ -35,12 +35,7 @@ class TestLazyThroughput:
 
         def run_chain():
             # 构建计算图并执行
-            return (
-                lazy_dasframe.detrend(axis="time")
-                .bandpass(10, 100)
-                .normalize()
-                .collect()
-            )
+            return lazy_dasframe.detrend(axis="time").bandpass(10, 100).normalize().collect()
 
         # 运行基准测试
         benchmark(run_chain)

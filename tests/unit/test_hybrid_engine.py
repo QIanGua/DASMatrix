@@ -39,9 +39,7 @@ def test_detrend_correctness(sample_data, df):
     result = df.detrend(axis="time").collect()
 
     # Check
-    np.testing.assert_allclose(
-        result, expected, rtol=1e-3, atol=1e-3, err_msg="Detrend result mismatch"
-    )
+    np.testing.assert_allclose(result, expected, rtol=1e-3, atol=1e-3, err_msg="Detrend result mismatch")
 
 
 def test_abs_scale_correctness(sample_data, df):

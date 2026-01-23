@@ -74,10 +74,7 @@ class TestDASSpool(unittest.TestCase):
         self.assertEqual(first_row["n_channels"], 10)
 
         # Check time sorting
-        self.assertTrue(
-            pd.to_datetime(s._index.iloc[0]["start_time"])
-            < pd.to_datetime(s._index.iloc[1]["start_time"])
-        )
+        self.assertTrue(pd.to_datetime(s._index.iloc[0]["start_time"]) < pd.to_datetime(s._index.iloc[1]["start_time"]))
 
     def test_spool_select(self):
         s = spool(self.test_dir / "*.h5").update()

@@ -22,9 +22,7 @@ class RingBuffer:
     - Efficient circular wrapping.
     """
 
-    def __init__(
-        self, capacity: int, n_channels: int, dtype: Union[type, np.dtype] = np.float32
-    ):
+    def __init__(self, capacity: int, n_channels: int, dtype: Union[type, np.dtype] = np.float32):
         """
         Initialize the RingBuffer.
 

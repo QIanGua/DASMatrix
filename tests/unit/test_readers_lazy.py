@@ -41,9 +41,7 @@ def dummy_h5_file(tmp_path, sampling_config):
     n_samples = 100
     n_channels = sampling_config.channels
 
-    data = np.random.randint(-1000, 1000, size=(n_samples, n_channels)).astype(
-        np.float32
-    )
+    data = np.random.randint(-1000, 1000, size=(n_samples, n_channels)).astype(np.float32)
 
     with h5py.File(file_path, "w") as f:
         f.create_dataset("Acquisition/Raw[0]", data=data)

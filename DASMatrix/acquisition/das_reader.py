@@ -51,9 +51,7 @@ class DataReader(ABC):
         self.logger = logging.getLogger(__name__)
 
     @abstractmethod
-    def ReadRawData(
-        self, file_path: Path, target_col: Optional[List[int]] = None
-    ) -> Union[np.ndarray, "da.Array"]:
+    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取原始数据
 
         Args:
@@ -83,9 +81,7 @@ class DataReader(ABC):
 class DATReader(DataReader):
     """DAT 格式数据读取器 (向后兼容)"""
 
-    def ReadRawData(
-        self, file_path: Path, target_col: Optional[List[int]] = None
-    ) -> Union[np.ndarray, "da.Array"]:
+    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取 DAT 格式的原始数据"""
         self.ValidateFile(file_path)
 
@@ -122,9 +118,7 @@ class DATReader(DataReader):
 class H5Reader(DataReader):
     """HDF5 格式数据读取器 (向后兼容)"""
 
-    def ReadRawData(
-        self, file_path: Path, target_col: Optional[List[int]] = None
-    ) -> Union[np.ndarray, "da.Array"]:
+    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取 HDF5 格式的原始数据"""
         self.ValidateFile(file_path)
 
@@ -151,9 +145,7 @@ class H5Reader(DataReader):
 class SEGYReader(DataReader):
     """SEGY 格式数据读取器 (向后兼容)"""
 
-    def ReadRawData(
-        self, file_path: Path, target_col: Optional[List[int]] = None
-    ) -> Union[np.ndarray, "da.Array"]:
+    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取 SEGY 格式的原始数据"""
         self.ValidateFile(file_path)
 
@@ -174,9 +166,7 @@ class SEGYReader(DataReader):
 class MiniSEEDReader(DataReader):
     """MiniSEED 格式数据读取器 (向后兼容)"""
 
-    def ReadRawData(
-        self, file_path: Path, target_col: Optional[List[int]] = None
-    ) -> Union[np.ndarray, "da.Array"]:
+    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取 MiniSEED 格式的原始数据"""
         self.ValidateFile(file_path)
 
@@ -214,9 +204,7 @@ class DASReader:
         >>> data = reader.ReadRawData(file_path)
     """
 
-    def __init__(
-        self, sampling_config: SamplingConfig, data_type: DataType = DataType.DAT
-    ):
+    def __init__(self, sampling_config: SamplingConfig, data_type: DataType = DataType.DAT):
         """初始化数据读取器
 
         Args:
@@ -241,9 +229,7 @@ class DASReader:
 
         self.reader: DataReader = reader_class(sampling_config)
 
-    def ReadRawData(
-        self, file_path: Path, target_col: Optional[List[int]] = None
-    ) -> Union[np.ndarray, "da.Array"]:
+    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取指定路径的数据文件
 
         Args:

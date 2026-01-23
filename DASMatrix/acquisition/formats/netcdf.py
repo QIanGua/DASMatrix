@@ -160,11 +160,7 @@ class NetCDFFormatPlugin(FormatPlugin):
                 dim_lower = str(dim).lower()
                 if "time" in dim_lower or dim_lower == "t":
                     time_dim = dim
-                elif (
-                    "channel" in dim_lower
-                    or "distance" in dim_lower
-                    or dim_lower in ("x", "d")
-                ):
+                elif "channel" in dim_lower or "distance" in dim_lower or dim_lower in ("x", "d"):
                     channel_dim = dim
 
             # 应用选择

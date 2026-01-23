@@ -120,9 +120,7 @@ class ExecutionPlanner:
                 if pending_fusion:
                     if len(pending_fusion) > 1:
                         # 只有多个可融合操作时才创建融合节点
-                        fused_node = FusionNode(
-                            pending_fusion, name=f"FusedOp_{len(pending_fusion)}"
-                        )
+                        fused_node = FusionNode(pending_fusion, name=f"FusedOp_{len(pending_fusion)}")
                         fused_list.append(fused_node)
                     else:
                         # 单个可融合操作直接添加
@@ -135,9 +133,7 @@ class ExecutionPlanner:
         # 处理末尾的 pending
         if pending_fusion:
             if len(pending_fusion) > 1:
-                fused_node = FusionNode(
-                    pending_fusion, name=f"FusedOp_{len(pending_fusion)}"
-                )
+                fused_node = FusionNode(pending_fusion, name=f"FusedOp_{len(pending_fusion)}")
                 fused_list.append(fused_node)
             else:
                 fused_list.append(pending_fusion[0])

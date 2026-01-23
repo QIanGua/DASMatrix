@@ -24,15 +24,9 @@ class FiberGeometry(BaseModel):
         None, description="List of (lon, lat, elevation) tuples"
     )
     gauge_length: float = Field(..., description="Gauge length in meters")
-    channel_spacing: float = Field(
-        ..., description="Spacing between channels in meters"
-    )
-    total_length: Optional[float] = Field(
-        None, description="Total fiber length in meters"
-    )
-    start_distance: float = Field(
-        0.0, description="Distance of the first channel from the interrogator (m)"
-    )
+    channel_spacing: float = Field(..., description="Spacing between channels in meters")
+    total_length: Optional[float] = Field(None, description="Total fiber length in meters")
+    start_distance: float = Field(0.0, description="Distance of the first channel from the interrogator (m)")
 
 
 class Interrogator(BaseModel):
@@ -62,9 +56,7 @@ class Acquisition(BaseModel):
         "strain_rate",
         description="Physical unit of the data (e.g., strain, strain_rate, velocity)",
     )
-    spatial_reference: str = Field(
-        "measured_depth", description="Reference for channel positions"
-    )
+    spatial_reference: str = Field("measured_depth", description="Reference for channel positions")
 
 
 class ProcessingStep(BaseModel):
@@ -72,12 +64,8 @@ class ProcessingStep(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    operation: str = Field(
-        ..., description="Name of the operation (e.g., bandpass, detrend)"
-    )
-    parameters: Dict[str, Any] = Field(
-        ..., description="Parameters used for the operation"
-    )
+    operation: str = Field(..., description="Name of the operation (e.g., bandpass, detrend)")
+    parameters: Dict[str, Any] = Field(..., description="Parameters used for the operation")
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="Time of processing",
@@ -160,10 +148,7 @@ class DASInventory(BaseModel):
         """Brief string representation."""
         info = [f"DASInventory(project='{self.project_name}')"]
         if self.acquisition:
-            info.append(
-                f"  Shape: {self.acquisition.n_channels} ch x "
-                f"{self.acquisition.n_samples or '?'} samples"
-            )
+            info.append(f"  Shape: {self.acquisition.n_channels} ch x {self.acquisition.n_samples or '?'} samples")
             info.append(f"  Time: {self.acquisition.start_time}")
         if self.interrogator:
             info.append(

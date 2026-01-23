@@ -69,10 +69,7 @@ def get_example_frame(
     elif name == "event":
         data = _generate_event(t, n_channels)
     else:
-        raise ValueError(
-            f"Unknown example type: {name}. "
-            f"Available: random_das, sine_wave, chirp, impulse, event"
-        )
+        raise ValueError(f"Unknown example type: {name}. Available: random_das, sine_wave, chirp, impulse, event")
 
     return DASFrame(data, fs=fs, dx=dx)
 
@@ -224,9 +221,7 @@ def _generate_spool_frames(name: str, n_frames: int, **kwargs) -> List[DASFrame]
 
         for i in range(n_frames):
             frame_type = types[i % len(types)]
-            frame = get_example_frame(
-                cast(ExampleFrameType, frame_type), seed=42 + i, **kwargs
-            )
+            frame = get_example_frame(cast(ExampleFrameType, frame_type), seed=42 + i, **kwargs)
             frames.append(frame)
 
     elif name == "continuous":

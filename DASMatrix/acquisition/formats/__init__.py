@@ -190,10 +190,7 @@ class FormatRegistry:
         data = plugin.read(path, **kwargs)
 
         # 尝试附加 Inventory
-        if (
-            isinstance(data, (xr.DataArray, xr.Dataset))
-            and "inventory" not in data.attrs
-        ):
+        if isinstance(data, (xr.DataArray, xr.Dataset)) and "inventory" not in data.attrs:
             try:
                 # 避免重复读取，如果插件已经在 read 中利用了 scan 逻辑最好，
                 # 但为了通用性，这里显式 scan 一次

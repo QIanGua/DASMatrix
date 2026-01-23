@@ -218,9 +218,7 @@ class DASAgentTools:
         config = SamplingConfig(fs=int(data.fs))
         processor = DASProcessor(config)
 
-        spectrum = processor.ComputeSpectrum(
-            arr, channel, window_size=window_size, overlap=overlap
-        )
+        spectrum = processor.ComputeSpectrum(arr, channel, window_size=window_size, overlap=overlap)
 
         # 找峰值
         peaks = processor.FindPeakFrequencies(spectrum, n_peaks=5)
@@ -229,10 +227,7 @@ class DASAgentTools:
             "channel": channel,
             "window_size": window_size,
             "frequency_range": [0, data.fs / 2],
-            "peak_frequencies": [
-                {"frequency_hz": p["frequency"], "magnitude_db": p["magnitude"]}
-                for p in peaks
-            ],
+            "peak_frequencies": [{"frequency_hz": p["frequency"], "magnitude_db": p["magnitude"]} for p in peaks],
             "dominant_frequency_hz": peaks[0]["frequency"] if peaks else None,
         }
 
