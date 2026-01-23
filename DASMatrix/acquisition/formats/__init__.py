@@ -192,8 +192,7 @@ class FormatRegistry:
         # 尝试附加 Inventory
         if isinstance(data, (xr.DataArray, xr.Dataset)) and "inventory" not in data.attrs:
             try:
-                # 避免重复读取，如果插件已经在 read 中利用了 scan 逻辑最好，
-                # 但为了通用性，这里显式 scan 一次
+                # 优先检查插件是否已经注入了 inventory，如果没有则通过 scan 尝试
                 meta = plugin.scan(path)
                 data.attrs["inventory"] = meta.to_inventory()
             except Exception as e:

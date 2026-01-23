@@ -36,11 +36,15 @@ class FormatMetadata:
     format_name: str = ""
     format_version: str = ""
 
-    # 扩展属性
+    # 扩展属性与标准化元数据
+    inventory: Optional["DASInventory"] = None
     attrs: dict = field(default_factory=dict)
 
     def to_inventory(self) -> "DASInventory":
         """Convert to DASInventory object."""
+        if self.inventory is not None:
+            return self.inventory
+
         from ...core.inventory import Acquisition, DASInventory, FiberGeometry
 
         return DASInventory(

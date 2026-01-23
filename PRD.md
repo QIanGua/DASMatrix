@@ -366,8 +366,8 @@ def fused_kernel(x, out):
 - **M0** ✅ DASFrame (Xarray/Dask后端) + das_reader + 链式滤波
 - **M1** ✅ 计算图 + Numba/Polars后端 + 优化器
 - **M2** ✅ FFT/STFT/F-K滤波 + Nature/Science级可视化
-- **M3** 🚧 实时监控示例 (部分实现)
-- **M4** 📋 分布式 Ray 后端 (计划中)
+- **M3** ✅ 实时监控与极致性能优化 (2026-01)
+- **M4** 🚧 标准化元数据与生态集成 (进行中)
 
 ### 7.2 性能优先级策略
 
@@ -1149,18 +1149,15 @@ class TestPerformance:
 - 测试覆盖率 80%+
 - 完善的 API 文档
 
-### 11.2 Phase 2: 功能增强 (2025 Q2, 10 周)
+### 11.2 Phase 2: 功能增强与极致性能 (2025 Q2 - 2026 Q1) [已结项]
 
-| 任务 | 优先级 | 工时 | 依赖 |
+| 任务 | 优先级 | 状态 | 成果 |
 |------|--------|------|------|
-| DASInventory 元数据系统 | P1 | 2 周 | - |
-| Atoms 有状态流水线 | P1 | 2 周 | - |
-| LFilter/SosFilt 有状态滤波 | P1 | 1 周 | Atoms |
-| ObsPy 互操作 | P1 | 1 周 | - |
-| DASCore 互操作 | P1 | 0.5 周 | - |
-| 性能基准测试套件 | P1 | 1 周 | - |
-| Zarr 存储后端 | P2 | 2 周 | - |
-| APSENSING/SILIXA 格式 | P1 | 1 周 | 格式框架 |
+| 极致性能优化 (Dask/Numba) | P0 | ✅ 已完成 | 核外处理、算子融合、Welford 归一化 |
+| 现代 STFT API 升级 | P0 | ✅ 已完成 | 采用 ShortTimeFFT，支持 TB 级延迟分析 |
+| 性能基准测试套件 | P1 | ✅ 已完成 | 建立 tests/performance 体系 |
+| APSENSING/SILIXA 格式 | P1 | ✅ 已完成 | 支持 12+ 种主流 DAS 格式 |
+| 智能可视化保护 | P1 | ✅ 已完成 | 自动 Decimation 降采样保护 |
 
 **Phase 2 交付物**:
 
@@ -1169,7 +1166,16 @@ class TestPerformance:
 - 与 ObsPy/DASCore 互操作
 - 性能基准测试报告
 
-### 11.3 Phase 3: 高级特性 (2025 Q3-Q4, 16 周)
+### 11.3 Phase 3: 智能分析与生态集成 (2026 Q1-Q2, 12 周)
+
+| 任务 | 优先级 | 负责人 | 目标与技术细节 |
+|------|--------|--------|----------------|
+| **DASInventory 深度集成** | P1 | - | 1. 升级 FormatPlugin 接口以支持全量 Inventory 返回；2. 针对 PRODML/H5 实现元数据自动映射逻辑。 |
+| **Atoms 有状态流水线** | P1 | - | 1. 实现 `processing/atoms.py` 核心抽象；2. 实现 `SosFilt` 有状态滤波，确保分块处理时无边界突变。 |
+| **Ecosystem Interop** | P1 | - | 1. 建立与 ObsPy (Stream/Trace) 的双向转换；2. 支持与 DASCore (Patch) 的互转，打破数据隔离。 |
+| **分析模块 (analysis/)** | P1 | - | 1. 实现经典 STA/LTA 事件检测算法；2. 增加基于 Polars 的高速事件属性查询功能。 |
+| **GPU (CuPy) 后端融合** | P2 | - | 1. 将 Numba JIT 内核逻辑迁移至 CuPy/CUDA 内核；2. 支持超大规模矩阵的 GPU 加速 FFT。 |
+| **PyPI 正式发布** | P1 | - | 1. 完善文档与教程视频；2. 发布 v0.2.0 稳定版至 PyPI。 |
 
 | 任务 | 优先级 | 工时 | 依赖 |
 |------|--------|------|------|

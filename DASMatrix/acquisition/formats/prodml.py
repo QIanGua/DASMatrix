@@ -96,6 +96,10 @@ class PRODMLFormatPlugin(FormatPlugin):
             "StartTime",
             "EndTime",
             "NumberOfLoci",
+            "ProjectName",
+            "DataUnit",
+            "IUModel",
+            "IUManufacturer",
             "SchemaVersion",
         ]:
             if key in f.attrs:
@@ -112,19 +116,55 @@ class PRODMLFormatPlugin(FormatPlugin):
         return attrs
 
     def scan(self, path: Path) -> FormatMetadata:
-        """快速扫描 PRODML 文件元数据"""
+        """快速扫描 PRODML 文件元数据并构建 DASInventory"""
+        from datetime import datetime
+
+        from ...core.inventory import Acquisition, DASInventory, FiberGeometry, Interrogator
+
         with h5py.File(path, "r") as f:
             dp = self._find_data_path(f)
             if dp is None:
                 raise ValueError(f"无效的 PRODML 文件: {path}")
 
             dataset = f[dp]
+            if not isinstance(dataset, h5py.Dataset):
+                raise TypeError(f"Expected Dataset at {dp}")
             shape = dataset.shape
             attrs = self._read_attrs(f)
 
             fs = float(attrs.get("SamplingFrequency", 1000.0))
             dx = float(attrs.get("SpatialSamplingInterval", 1.0))
             gl = attrs.get("GaugeLength")
+
+            # 构建标准的 DASInventory
+            try:
+                start_time_str = str(attrs.get("StartTime", "1970-01-01T00:00:00"))
+                # Remove Z or handle common ISO formats if needed
+                start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+            except Exception:
+                from datetime import timezone
+
+                start_time = datetime.fromtimestamp(0, tz=timezone.utc)
+
+            inventory = DASInventory(
+                project_name=str(attrs.get("ProjectName", "PRODML Project")),
+                acquisition=Acquisition(
+                    start_time=start_time,
+                    n_channels=shape[1] if len(shape) > 1 else 1,
+                    n_samples=shape[0],
+                    data_unit=str(attrs.get("DataUnit", "strain_rate")),
+                ),
+                fiber=FiberGeometry(
+                    channel_spacing=dx,
+                    gauge_length=float(gl) if gl is not None else 1.0,
+                ),
+                interrogator=Interrogator(
+                    model=str(attrs.get("IUModel", "Unknown")),
+                    manufacturer=str(attrs.get("IUManufacturer", "Unknown")),
+                    sampling_rate=fs,
+                ),
+                custom_attrs={k: v for k, v in attrs.items() if isinstance(v, (int, float, str))},
+            )
 
             return FormatMetadata(
                 n_samples=shape[0],
@@ -136,6 +176,7 @@ class PRODMLFormatPlugin(FormatPlugin):
                 file_size=path.stat().st_size,
                 format_name=self.format_name,
                 format_version=str(attrs.get("SchemaVersion", self.version)),
+                inventory=inventory,
                 attrs=attrs,
             )
 
@@ -157,6 +198,8 @@ class PRODMLFormatPlugin(FormatPlugin):
                 raise ValueError(f"无效的 PRODML 文件: {path}")
 
             dataset = f[dp]
+            if not isinstance(dataset, h5py.Dataset):
+                raise TypeError(f"Expected Dataset at {dp}")
             attrs = self._read_attrs(f)
 
             fs = float(attrs.get("SamplingFrequency", 1000.0))

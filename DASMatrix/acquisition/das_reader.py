@@ -106,11 +106,14 @@ class H5Reader(DataReader):
                             data_key = key
                             break
 
-                dataset = f[data_key]
+                node = f[data_key]
+                if not isinstance(node, h5py.Dataset):
+                    raise TypeError(f"Expected Dataset at {data_key}, found {type(node)}")
+
                 if target_col:
-                    data = dataset[:, target_col]
+                    data = node[:, target_col]
                 else:
-                    data = dataset[:]
+                    data = node[:]
                 return data
         except Exception as e:
             self.logger.error(f"读取 H5 文件时发生错误: {e}")

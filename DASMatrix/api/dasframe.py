@@ -65,6 +65,13 @@ class DASFrame:
             if "time" in data.dims and data.dims[0] != "time":
                 data = data.transpose("time", ...)
             self._data = data
+            # Absorb attributes into metadata
+            self._metadata = {**data.attrs, **metadata}
+            # Special handling for sampling parameters if they exist in attrs
+            if "sampling_rate" in self._metadata and fs is None:
+                self._fs = float(self._metadata["sampling_rate"])
+            if "channel_spacing" in self._metadata and dx == 1.0:
+                self._dx = float(self._metadata["channel_spacing"])
         else:
             # Wrap numpy/dask array into xarray
             # Assume dims are (time, channel)
