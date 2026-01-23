@@ -83,7 +83,7 @@ class NumbaBackend:
             ks = np.zeros(n_channels, dtype=dtype)
             bs = np.zeros(n_channels, dtype=dtype)
 
-            for j in numba.prange(n_channels):
+            for j in numba.prange(n_channels):  # type: ignore
                 s_y = 0.0
                 s_xy = 0.0
                 for i in range(n_samples):
@@ -101,7 +101,7 @@ class NumbaBackend:
 
         elif compute_demean:
             means = np.zeros(n_channels, dtype=dtype)
-            for j in numba.prange(n_channels):
+            for j in numba.prange(n_channels):  # type: ignore
                 s_y = 0.0
                 for i in range(n_samples):
                     s_y += data[i, j]
