@@ -5,6 +5,8 @@ import dask.array as da
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from scipy import signal
 
 from ..core.inventory import DASInventory
@@ -28,22 +30,12 @@ class DASFrame:
         dx: float = 1.0,
         **metadata: Any,
     ) -> None:
-        """Initialize DASFrame.
-
-        Args:
-            data: Input data.
-            fs: Sampling frequency (Hz).
-            dx: Channel spacing (m).
-            **metadata: Additional metadata.
-        """
+        """Initialize DASFrame."""
         if isinstance(data, DASFrame):
-            # Copy constructor roughly
             self._data = data._data
             self._fs = data.fs
             self._dx = getattr(data, "_dx", dx)
-            # Combine metadata, new metadata overrides old
             self._metadata = {**data._metadata, **metadata}
-            # Special handling for inventory in metadata to ensure type safety
             if "inventory" in self._metadata:
                 inv = self._metadata["inventory"]
                 if isinstance(inv, dict):
@@ -54,31 +46,24 @@ class DASFrame:
         self._dx = dx
         self._metadata = metadata
 
-        # Helper to ensure inventory is properly typed if passed
         if "inventory" in self._metadata:
             inv = self._metadata["inventory"]
             if isinstance(inv, dict):
                 self._metadata["inventory"] = DASInventory.model_validate(inv)
 
         if isinstance(data, xr.DataArray):
-            # Ensure order is (time, distance)
             if "time" in data.dims and data.dims[0] != "time":
                 data = data.transpose("time", ...)
             self._data = data
-            # Absorb attributes into metadata
             self._metadata = {**data.attrs, **metadata}
-            # Special handling for sampling parameters if they exist in attrs
             if "sampling_rate" in self._metadata and fs is None:
                 self._fs = float(self._metadata["sampling_rate"])
             if "channel_spacing" in self._metadata and dx == 1.0:
                 self._dx = float(self._metadata["channel_spacing"])
         else:
-            # Wrap numpy/dask array into xarray
-            # Assume dims are (time, channel)
             if not isinstance(data, (np.ndarray, da.Array)):
                 data = np.asarray(data)
 
-            # Create coordinates
             nt, nx = data.shape
             coords = {
                 "time": np.arange(nt) / fs,
@@ -93,7 +78,6 @@ class DASFrame:
                 attrs={"fs": fs, "dx": dx, **metadata},
             )
 
-            # Ensure it is chunked (dask backed) if it isn't already
             if not self._data.chunks:
                 self._data = self._data.chunk({"time": "auto", "distance": -1})
 
@@ -120,37 +104,27 @@ class DASFrame:
         """Compute and return numpy array."""
         return self._data.compute().values
 
-    # --- 基础操作 ---
     def astype(self, dtype: Any) -> "DASFrame":
         """Cast data to a new type."""
         return DASFrame(self._data.astype(dtype), self._fs, self._dx, **self._metadata)
 
     def flatten(self) -> np.ndarray:
-        """Return a flattened version of the data (Sink)."""
+        """Return a flattened version of the data."""
         return self.collect().flatten()
 
     def slice(self, t: slice = slice(None), x: slice = slice(None)) -> "DASFrame":
         """Slice data."""
-        # xarray is slicing by index here (isel)
         sliced = self._data.isel(time=t, distance=x)
         return DASFrame(sliced, self._fs, self._dx, **self._metadata)
 
-    # --- Signal Operations ---
-
     def bandpass(self, low: float, high: float, order: int = 4) -> "DASFrame":
-        """Apply bandpass filter.
-
-        Uses dask map_blocks. We ensure time is the core dimension.
-        """
+        """Apply bandpass filter."""
 
         def _filter_func(block, fs, low, high, order):
-            # block will have shape (..., time) because time is the core dim
             nyq = 0.5 * fs
             sos = signal.butter(order, [low / nyq, high / nyq], btype="band", output="sos")
             return signal.sosfiltfilt(sos, block, axis=-1)
 
-        # Transpose to ensure time is the last dimension before applying ufunc
-        # This is safer for dask parallelization across other dimensions
         data = self._data
         filtered = xr.apply_ufunc(
             _filter_func,
@@ -250,7 +224,7 @@ class DASFrame:
             std = self._data.std(dim="time")
             std = xr.where(std == 0, 1.0, std)
             normalized = (self._data - mean) / std
-        else:  # minmax
+        else:
             min_val = self._data.min(dim="time")
             max_val = self._data.max(dim="time")
             range_val = max_val - min_val
@@ -273,13 +247,8 @@ class DASFrame:
         dim = "time" if axis == 0 or axis == "time" else "distance"
         return self._data.all(dim=dim).compute().values
 
-    # --- 统计 (Statistics) ---
     def mean(self, axis: Optional[int] = 0) -> np.ndarray:
-        """计算均值。
-
-        Args:
-            axis: 计算轴，0 表示沿时间轴返回每通道的均值，None 返回全局标量
-        """
+        """计算均值。"""
         if axis is None:
             return self._data.mean().compute().values
         dim = "time" if axis == 0 else "distance"
@@ -310,22 +279,16 @@ class DASFrame:
         """计算 RMS（均方根）。"""
         data_sq = self._data**2
         if window is None:
-            # 返回全局/通道 RMS (Sink)
             return np.sqrt(data_sq.mean(dim="time").compute().values)
         else:
-            # 返回滑动 RMS (Lazy Transformation)
             rolling_mean = data_sq.rolling(time=window, center=True).mean()
             rms_data = np.sqrt(rolling_mean)
             return DASFrame(rms_data, self._fs, self._dx, **self._metadata)
 
     def fft(self) -> "DASFrame":
-        """快速傅立叶变换 (Real FFT)，返回单边幅度谱。
-
-        基于 Dask 延迟计算。注意：FFT 仍需在内存中持有完整的变换轴。
-        """
+        """快速傅立叶变换 (Real FFT)。"""
 
         def _fft_func(data):
-            # apply_ufunc moves core dim (time) to last axis
             return np.abs(np.fft.rfft(data, axis=-1))
 
         n_samples = self._data.sizes["time"]
@@ -342,7 +305,6 @@ class DASFrame:
         )
 
         spectrum = spectrum.assign_coords(frequency=freqs)
-        # transpose back to (frequency, distance)
         spectrum = spectrum.transpose("frequency", "distance")
 
         return DASFrame(spectrum, self._fs, self._dx, **self._metadata)
@@ -369,11 +331,7 @@ class DASFrame:
         return analytical.abs()
 
     def spatial_smooth(self, kernel: int = 3) -> "DASFrame":
-        """空间平滑处理。
-
-        Args:
-            kernel: 滚动窗口大小（通道数）。
-        """
+        """空间平滑处理。"""
         smoothed = self._data.rolling(distance=kernel, center=True).mean()
         return DASFrame(smoothed, self._fs, self._dx, **self._metadata)
 
@@ -387,24 +345,18 @@ class DASFrame:
         return DASFrame(np.abs(self._data), self._fs, self._dx, **self._metadata)
 
     def integrate(self) -> "DASFrame":
-        """Time domain integration (cumulative sum / fs)."""
-        # trapezium integration or simple cumsum
-        # cumsum is faster and dask friendly
+        """Time domain integration."""
         integrated = self._data.cumsum(dim="time") / self._fs
         return DASFrame(integrated, self._fs, self._dx, **self._metadata)
 
     def differentiate(self) -> "DASFrame":
-        """Time domain differentiation (diff * fs)."""
+        """Time domain differentiation."""
         differentiated = self._data.diff(dim="time") * self._fs
-        # diff reduce size by 1, pad to keep shape
         differentiated = differentiated.pad(time=(1, 0), mode="edge")
         return DASFrame(differentiated, self._fs, self._dx, **self._metadata)
 
     def stft(self, nperseg: int = 256, noverlap: Optional[int] = None, window: str = "hann") -> "DASFrame":
-        """短时傅立叶变换，进行时频分析。
-
-        使用 scipy.signal.ShortTimeFFT 替代旧的 stft API。
-        """
+        """短时傅立叶变换，进行时频分析。"""
         from scipy.signal import ShortTimeFFT, get_window
 
         if noverlap is None:
@@ -415,15 +367,10 @@ class DASFrame:
         SFT = ShortTimeFFT(win, hop=hop, fs=self._fs, scale_to="magnitude")
 
         def _stft_block(block, sft_obj):
-            # block shape (..., time)
-            # ShortTimeFFT.stft axis=-1 by default
             Zxx = sft_obj.stft(block)
-            # Zxx shape (..., freq, time_stft)
             return np.abs(Zxx).astype(np.float32)
 
-        # Get coordinates using ShortTimeFFT properties
         freqs = SFT.f
-        # We need to know how many time steps ShortTimeFFT will produce for our input length
         n_t = self._data.sizes["time"]
         t_coords = SFT.t(n_t)
 
@@ -452,10 +399,7 @@ class DASFrame:
         v_max: Optional[float] = None,
         dx: Optional[float] = None,
     ) -> "DASFrame":
-        """F-K 滤波 (速度滤波)。
-
-        现在基于 Dask 延迟计算，支持大规模数据集。
-        """
+        """F-K 滤波 (速度滤波)。"""
         from ..config.sampling_config import SamplingConfig
         from ..processing.das_processor import DASProcessor
 
@@ -463,7 +407,6 @@ class DASFrame:
             dx = self._dx
 
         def _fk_func(block, fs, v_min, v_max, dx):
-            # block shape (time, distance)
             config = SamplingConfig(fs=fs, channels=block.shape[1])
             processor = DASProcessor(config)
             return processor.FKFilter(block, v_min=v_min, v_max=v_max, dx=dx)
@@ -479,11 +422,9 @@ class DASFrame:
         )
         return DASFrame(filtered, self._fs, dx, **self._metadata)
 
-    # --- 检测 (Detection) ---
     def threshold_detect(self, threshold: Optional[float] = None, sigma: float = 3.0) -> "DASFrame":
-        """阈值检测。返回包含布尔值的延迟 DASFrame。"""
+        """阈值检测。"""
         if threshold is None:
-            # 计算全局或按通道的统计信息 (这会触发少量计算，但比全量 collect 好)
             mean_val = self._data.mean()
             std_val = self._data.std()
             threshold = float(mean_val.compute() + sigma * std_val.compute())
@@ -491,19 +432,35 @@ class DASFrame:
         detected = np.abs(self._data) > threshold
         return DASFrame(detected, self._fs, self._dx, **self._metadata)
 
-    # --- Visualization ---
+    def sta_lta(self, n_sta: int, n_lta: int) -> "DASFrame":
+        """STA/LTA 能量比检测。"""
+        from ..analysis.event_detection import sta_lta
+
+        def _sta_lta_func(block, ns, nl):
+            return sta_lta(block, ns, nl, axis=-1)
+
+        ratio = xr.apply_ufunc(
+            _sta_lta_func,
+            self._data,
+            kwargs={"ns": n_sta, "nl": n_lta},
+            input_core_dims=[["time"]],
+            output_core_dims=[["time"]],
+            dask="parallelized",
+            output_dtypes=[self._data.dtype],
+        )
+
+        return DASFrame(ratio, self._fs, self._dx, **self._metadata)
 
     def plot_ts(
         self,
         ch: Optional[int] = None,
         title: str = "Time Series",
-        ax: Optional[plt.Axes] = None,
+        ax: Optional[Axes] = None,
         max_samples: int = 5000,
         **kwargs,
-    ) -> plt.Figure:
-        """绘制时间序列。具有自动降采样保护。"""
+    ) -> Figure:
+        """绘制时间序列。"""
         if ch is None:
-            # Take first few channels if not specified
             frame = self.slice(x=slice(0, min(5, self.shape[1])))
         else:
             frame = self.slice(x=slice(ch, ch + 1))
@@ -520,7 +477,7 @@ class DASFrame:
         else:
             if ax.figure is None:
                 raise ValueError("Provided ax must belong to a figure")
-            fig = cast(plt.Figure, ax.figure)
+            fig = cast(Figure, ax.figure)
 
         t = frame._data.time.values
         if ch is None:
@@ -538,11 +495,10 @@ class DASFrame:
         self,
         ch: int = 0,
         title: str = "Spectrum",
-        ax: Optional[plt.Axes] = None,
+        ax: Optional[Axes] = None,
         **kwargs: Any,
-    ) -> plt.Figure:
+    ) -> Figure:
         """绘制频谱图 (FFT)。"""
-        # 优化：仅采集特定通道的数据
         ch_data = self._data.isel(distance=ch).compute().values
 
         from ..visualization.das_visualizer import SpectrumPlot
@@ -564,11 +520,10 @@ class DASFrame:
         title: str = "Spectrogram",
         window_size: int = 1024,
         overlap: float = 0.75,
-        ax: Optional[plt.Axes] = None,
+        ax: Optional[Axes] = None,
         **kwargs: Any,
-    ) -> plt.Figure:
+    ) -> Figure:
         """绘制时频图 (STFT)。"""
-        # 优化：仅采集特定通道的数据
         ch_data = self._data.isel(distance=ch).compute().values
 
         from ..visualization.das_visualizer import SpectrogramPlot
@@ -591,14 +546,11 @@ class DASFrame:
         t_range: Optional[builtins.slice] = None,
         title: str = "DAS Waterfall",
         cmap: str = "RdBu_r",
-        ax: Optional[plt.Axes] = None,
+        ax: Optional[Axes] = None,
         max_samples: int = 2000,
         **kwargs: Any,
-    ) -> plt.Figure:
-        """绘制热图（瀑布图）。
-
-        具备自动降采样保护功能，防止大数据量导致绘图卡死。
-        """
+    ) -> Figure:
+        """绘制热图（瀑布图）。"""
         if t_range is not None or channels is not None:
             import warnings
 
@@ -607,7 +559,6 @@ class DASFrame:
         else:
             frame = self
 
-        # 自动降采样逻辑 (Plot Protection)
         nt, nx = frame.shape
         if nt > max_samples:
             step = int(np.ceil(nt / max_samples))
@@ -620,7 +571,7 @@ class DASFrame:
         else:
             if ax.figure is None:
                 raise ValueError("Provided ax must belong to a figure")
-            fig = cast(plt.Figure, ax.figure)
+            fig = cast(Figure, ax.figure)
 
         dist_coords = frame._data.distance.values / self._dx
         time_coords = frame._data.time.values
@@ -655,9 +606,10 @@ class DASFrame:
         dx: float = 1.0,
         title: str = "F-K Spectrum",
         v_lines: Optional[List[float]] = None,
-        ax: Optional[plt.Axes] = None,
+        ax: Optional[Axes] = None,
         **kwargs: Any,
-    ) -> plt.Figure:
+    ) -> Figure:
+        """绘制 FK 谱图。"""
         data = self.collect()
 
         from ..config.sampling_config import SamplingConfig
@@ -682,21 +634,10 @@ class DASFrame:
         x_axis: str = "channel",
         title: Optional[str] = None,
         ylabel: Optional[str] = None,
-        ax: Optional[plt.Axes] = None,
+        ax: Optional[Axes] = None,
         **kwargs: Any,
-    ) -> plt.Figure:
-        """绘制空间剖面图（如 RMS, Mean, Std 等）。
-
-        Args:
-            stat: 统计指标类型, 'rms', 'mean', 'std', 'max', 'min'
-            channels: 通道切片，例如 slice(400, 600)
-            x_axis: X 轴数据，'channel' (点位) 或 'distance' (物理距离)
-            title: 图标题
-            ylabel: Y轴标签
-            ax: 可选标的 matplotlib Axes 对象
-            **kwargs: 传递给 ProfilePlot.plot 的其他参数
-        """
-        # 如果指定了通道范围，先进行切片
+    ) -> Figure:
+        """绘制空间剖面图。"""
         frame = self if channels is None else self.slice(x=channels)
 
         if stat == "rms":
@@ -727,7 +668,6 @@ class DASFrame:
         plotter = ProfilePlot()
 
         if x_axis == "channel":
-            # 这里的距离坐标除以 dx 得到绝对点位索引
             distances = frame._data.distance.values / self._dx
             if "xlabel" not in kwargs:
                 kwargs["xlabel"] = "Channel"
@@ -750,7 +690,7 @@ class DASFrame:
         channels: Optional[builtins.slice] = None,
         x_axis: str = "channel",
         **kwargs: Any,
-    ) -> plt.Figure:
+    ) -> Figure:
         """绘制 RMS 剖面图。"""
         return self.plot_profile(stat="rms", channels=channels, x_axis=x_axis, **kwargs)
 
@@ -759,7 +699,7 @@ class DASFrame:
         channels: Optional[builtins.slice] = None,
         x_axis: str = "channel",
         **kwargs: Any,
-    ) -> plt.Figure:
+    ) -> Figure:
         """绘制均值剖面图。"""
         return self.plot_profile(stat="mean", channels=channels, x_axis=x_axis, **kwargs)
 
@@ -768,6 +708,68 @@ class DASFrame:
         channels: Optional[builtins.slice] = None,
         x_axis: str = "channel",
         **kwargs: Any,
-    ) -> plt.Figure:
+    ) -> Figure:
         """绘制标准差剖面图。"""
         return self.plot_profile(stat="std", channels=channels, x_axis=x_axis, **kwargs)
+
+    def to_obspy(self) -> Any:
+        """Convert to ObsPy Stream."""
+        try:
+            from obspy import Stream, Trace, UTCDateTime  # type: ignore
+        except ImportError:
+            raise ImportError("obspy is required for to_obspy(). Install it with `pip install obspy`.")
+
+        data = self.collect()
+        nt, nx = data.shape
+
+        start_time = UTCDateTime(0)
+        inv = self._metadata.get("inventory")
+        if inv and hasattr(inv, "acquisition") and inv.acquisition.start_time:
+            start_time = UTCDateTime(inv.acquisition.start_time)
+
+        traces = []
+        for i in range(nx):
+            stats = {
+                "network": "DA",
+                "station": f"{i:04d}",
+                "channel": "HSF",
+                "sampling_rate": self._fs,
+                "starttime": start_time,
+                "npts": nt,
+            }
+            tr = Trace(data=data[:, i].astype(np.float32), header=stats)
+            traces.append(tr)
+
+        return Stream(traces=traces)
+
+    @classmethod
+    def from_obspy(cls, stream: Any, dx: float = 1.0) -> "DASFrame":
+        """Create DASFrame from ObsPy Stream."""
+        import numpy as np
+
+        data = np.stack([tr.data for tr in stream], axis=1)
+        fs = stream[0].stats.sampling_rate
+
+        metadata = {
+            "network": stream[0].stats.network,
+            "starttime": str(stream[0].stats.starttime),
+        }
+
+        return cls(data, fs=fs, dx=dx, **metadata)
+
+    def to_dascore(self) -> Any:
+        """Convert to DASCore Patch."""
+        try:
+            import dascore as dc  # type: ignore
+        except ImportError:
+            raise ImportError("dascore is required for to_dascore(). Install it with `pip install dascore`.")
+
+        return dc.Patch(
+            data=self.collect(),
+            coords={
+                "time": self._data.time.values,
+                "distance": self._data.distance.values,
+            },
+            dims=("time", "distance"),
+            attrs=self._metadata,
+        )

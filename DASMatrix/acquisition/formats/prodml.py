@@ -2,15 +2,11 @@
 
 PRODML (Production Markup Language) 是石油天然气工业的数据交换标准。
 PRODML v2.0/v2.1 定义了 DAS 数据的 HDF5 存储格式。
-
-参考:
-- https://www.energistics.org/prodml
-- https://github.com/DASDAE/dascore (MIT License)
 """
 
 import logging
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 import dask.array as da
 import h5py
@@ -23,25 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 class PRODMLFormatPlugin(FormatPlugin):
-    """PRODML 格式插件
-
-    PRODML 是石油天然气工业标准, v2.0/v2.1 定义了 DAS 数据格式。
-    数据存储结构:
-    - /Acquisition/Raw[0]/RawData
-    - /Acquisition/Raw[0]/RawDataTime
-
-    Attributes:
-        format_name: "PRODML"
-        file_extensions: (".h5", ".hdf5")
-        priority: 20 (最高优先级)
-    """
+    """PRODML 格式插件"""
 
     format_name = "PRODML"
     version = "2.1"
     file_extensions = (".h5", ".hdf5")
     priority = 20
 
-    # PRODML 特有的数据集路径
     DATA_PATHS = [
         "Acquisition/Raw[0]/RawData",
         "Acquisition/Raw[0]/RawData[0]",
@@ -58,19 +42,13 @@ class PRODMLFormatPlugin(FormatPlugin):
 
         try:
             with h5py.File(path, "r") as f:
-                # PRODML 特有: Acquisition 组
                 if "Acquisition" not in f:
                     return False
-
-                # 检查是否有 PRODML 标识
                 if "SchemaVersion" in f.attrs:
                     return True
-
-                # 检查常见的 PRODML 数据路径
                 for dp in self.DATA_PATHS:
                     if dp in f:
                         return True
-
                 return False
         except Exception:
             return False
@@ -85,9 +63,7 @@ class PRODMLFormatPlugin(FormatPlugin):
     def _read_attrs(self, f: h5py.File) -> dict:
         """读取 PRODML 元数据"""
         attrs = {}
-
-        # PRODML 标准属性
-        for key in [
+        keys = [
             "SamplingFrequency",
             "SpatialSamplingInterval",
             "GaugeLength",
@@ -101,18 +77,17 @@ class PRODMLFormatPlugin(FormatPlugin):
             "IUModel",
             "IUManufacturer",
             "SchemaVersion",
-        ]:
+        ]
+        for key in keys:
             if key in f.attrs:
                 attrs[key] = f.attrs[key]
 
-        # 尝试从 Acquisition 组读取
         if "Acquisition" in f:
             acq = f["Acquisition"]
             if hasattr(acq, "attrs"):
                 for key in acq.attrs:
                     if key not in attrs:
                         attrs[key] = acq.attrs[key]
-
         return attrs
 
     def scan(self, path: Path) -> FormatMetadata:
@@ -126,9 +101,11 @@ class PRODMLFormatPlugin(FormatPlugin):
             if dp is None:
                 raise ValueError(f"无效的 PRODML 文件: {path}")
 
-            dataset = f[dp]
-            if not isinstance(dataset, h5py.Dataset):
+            node = f[dp]
+            if not isinstance(node, h5py.Dataset):
                 raise TypeError(f"Expected Dataset at {dp}")
+
+            dataset = cast(h5py.Dataset, node)
             shape = dataset.shape
             attrs = self._read_attrs(f)
 
@@ -136,10 +113,8 @@ class PRODMLFormatPlugin(FormatPlugin):
             dx = float(attrs.get("SpatialSamplingInterval", 1.0))
             gl = attrs.get("GaugeLength")
 
-            # 构建标准的 DASInventory
             try:
                 start_time_str = str(attrs.get("StartTime", "1970-01-01T00:00:00"))
-                # Remove Z or handle common ISO formats if needed
                 start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
             except Exception:
                 from datetime import timezone
@@ -190,18 +165,19 @@ class PRODMLFormatPlugin(FormatPlugin):
     ) -> Union[xr.DataArray, da.Array, np.ndarray]:
         """读取 PRODML 格式数据"""
         f = h5py.File(path, "r")
-
         try:
             dp = self._find_data_path(f)
             if dp is None:
                 f.close()
                 raise ValueError(f"无效的 PRODML 文件: {path}")
 
-            dataset = f[dp]
-            if not isinstance(dataset, h5py.Dataset):
+            node = f[dp]
+            if not isinstance(node, h5py.Dataset):
+                f.close()
                 raise TypeError(f"Expected Dataset at {dp}")
-            attrs = self._read_attrs(f)
 
+            dataset = cast(h5py.Dataset, node)
+            attrs = self._read_attrs(f)
             fs = float(attrs.get("SamplingFrequency", 1000.0))
             dx = float(attrs.get("SpatialSamplingInterval", 1.0))
 
@@ -211,7 +187,8 @@ class PRODMLFormatPlugin(FormatPlugin):
                 data = np.array(dataset)
                 f.close()
 
-            n_samples, n_ch = dataset.shape[0], dataset.shape[1]
+            sh = getattr(data, "shape")
+            n_samples, n_ch = sh[0], sh[1]
 
             if channels is not None:
                 data = data[:, channels]
@@ -238,7 +215,6 @@ class PRODMLFormatPlugin(FormatPlugin):
                     **{k: v for k, v in attrs.items() if isinstance(v, (int, float, str))},
                 },
             )
-
         except Exception as e:
             f.close()
             raise e
