@@ -777,24 +777,58 @@ class DASFrame:
 
     # --- Units and Physical Quantities ---
 
+    # --- Units and Physical Quantities ---
+
     def to_standard_units(self) -> "DASFrame":
         """将数据转换为标准化的物理单位 (SI)。
 
-        依赖于 Metadata/Inventory 中的 data_unit 信息。
-        例如：相角(radians) -> 应变(strain)。
+        支持的转换逻辑：
+        1. Phase (rad) -> Strain (m/m)
+        2. Phase Rate (rad/s) -> Strain Rate (m/m/s)
         """
         inv = self.inventory
         if not inv or not inv.acquisition:
             warnings.warn("缺少 Inventory/Acquisition 信息，无法自动转换单位")
             return self
 
-        current_unit = inv.acquisition.data_unit
+        current_unit = self.get_unit()
         if current_unit == "unknown":
             return self
 
-        # TODO: 实现具体的转换逻辑矩阵
-        # 例如 Silixa iDAS: phase -> strain_rate -> strain
-        # 这里先提供一个占位符，支持基本的单位标准化
+        # 核心转换逻辑：Phase to Strain
+        # Formula: strain = (lambda * phase) / (4 * pi * n * L * G)
+        if current_unit in ["rad", "radians", "rad/s"]:
+            # 获取必要参数
+            wavelength = 1550.0  # Default nm
+            if inv.interrogator and inv.interrogator.wavelength:
+                wavelength = inv.interrogator.wavelength
+
+            gl = 10.0  # Default m
+            if inv.fiber and inv.fiber.gauge_length:
+                gl = inv.fiber.gauge_length
+
+            # 常数
+            n_refractive = 1.46
+            G_factor = 0.78
+
+            # 计算比例系数 (rad -> strain)
+            # lambda is in nm, convert to m: * 1e-9
+            scale = (wavelength * 1e-9) / (4 * np.pi * n_refractive * gl * G_factor)
+
+            target_unit = "strain" if current_unit != "rad/s" else "strain_rate"
+
+            # 应用转换
+            return self.scale(scale)._update_unit_metadata(target_unit)
+
+        return self
+
+    def _update_unit_metadata(self, unit_name: str) -> "DASFrame":
+        """Internal helper to update unit metadata."""
+        new_meta = self._metadata.copy()
+        if "inventory" in new_meta:
+            new_meta["inventory"].acquisition.data_unit = unit_name
+        new_meta["units"] = unit_name
+        self._metadata = new_meta
         return self
 
     def get_unit(self) -> Any:
@@ -812,15 +846,7 @@ class DASFrame:
         if current_unit == "unknown":
             raise ValueError("Current units are unknown, cannot convert.")
 
-        # This only works if data represents the quantity directly
-        # and not a vendor-specific encoded value.
         q = ureg.Quantity(self.collect(), current_unit)
         converted = q.to(target_unit).magnitude
 
-        # Update metadata
-        new_meta = self._metadata.copy()
-        if "inventory" in new_meta:
-            new_meta["inventory"].acquisition.data_unit = target_unit
-        new_meta["units"] = target_unit
-
-        return DASFrame(converted, fs=self._fs, dx=self._dx, **new_meta)
+        return DASFrame(converted, fs=self._fs, dx=self._dx)._update_unit_metadata(target_unit)

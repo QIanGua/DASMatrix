@@ -125,6 +125,10 @@ class H5FormatPlugin(FormatPlugin):
 
     def scan(self, path: Path) -> FormatMetadata:
         """快速扫描 HDF5 文件元数据"""
+        from datetime import datetime
+
+        from ...core.inventory import Acquisition, DASInventory, FiberGeometry, Interrogator
+
         with h5py.File(path, "r") as f:
             ds_path = self._find_dataset(f)
             if ds_path is None:
@@ -132,21 +136,36 @@ class H5FormatPlugin(FormatPlugin):
 
             dataset = f[ds_path]
             shape = dataset.shape
-
-            # 读取属性
             attrs = self._read_attrs(f)
             fs = attrs.get("sampling_rate", self.default_sampling_rate)
+            dx = attrs.get("channel_spacing", 1.0)
+            gl = attrs.get("gauge_length", 1.0)
+
+            # Simple Inventory
+            inventory = DASInventory(
+                project_name=str(f.attrs.get("ProjectName", "H5 Project")),
+                acquisition=Acquisition(
+                    start_time=datetime.now(),  # Placeholder
+                    n_channels=shape[1] if len(shape) > 1 else 1,
+                    n_samples=shape[0],
+                    data_unit=attrs.get("units", "unknown"),
+                ),
+                fiber=FiberGeometry(channel_spacing=dx, gauge_length=gl),
+                interrogator=Interrogator(model=str(f.attrs.get("IUModel", "H5-Gen")), sampling_rate=fs),
+                custom_attrs={k: v for k, v in f.attrs.items() if isinstance(v, (int, float, str))},
+            )
 
             return FormatMetadata(
                 n_samples=shape[0],
                 n_channels=shape[1] if len(shape) > 1 else 1,
                 sampling_rate=fs,
-                channel_spacing=attrs.get("channel_spacing"),
-                gauge_length=attrs.get("gauge_length"),
+                channel_spacing=dx,
+                gauge_length=gl,
                 file_size=path.stat().st_size,
                 format_name=self.format_name,
                 format_version=self.version,
-                attrs={"dataset_path": ds_path},
+                inventory=inventory,
+                attrs={**attrs, **{k: v for k, v in f.attrs.items() if isinstance(v, (int, float, str))}},
             )
 
     def read(

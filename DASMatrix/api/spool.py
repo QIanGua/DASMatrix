@@ -1,4 +1,4 @@
-import json
+import pickle
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -103,28 +103,18 @@ class DASSpool:
             return None, {}
 
         try:
-            # Using JSON for metadata cache and Parquet for Index for better performance
-            # Metadata cache contains complex objects (DASInventory), so JSON/Pickle is needed
-            # For now, let's use a simple strategy: all in one directory if cache_path is dir
-            # or just use a single file if it is a file.
-
-            # Simple approach: If cache_path is a directory, use index.parquet and meta_cache.json
             index_file = self._cache_path / "index.parquet"
-            meta_file = self._cache_path / "meta_cache.json"
+            meta_file = self._cache_path / "meta_cache.pkl"
 
             index_df = None
             if index_file.exists():
                 index_df = pd.read_parquet(index_file)
-                # Convert path strings back to Path objects
                 index_df["path"] = index_df["path"].apply(Path)
 
             meta_cache = {}
             if meta_file.exists():
-                with open(meta_file, "r") as f:
-                    raw_cache = json.load(f)
-                    # We would need to reconstruct FormatMetadata and DASInventory here
-                    # This is complex. For now, let's focus on the index persistence.
-                    pass
+                with open(meta_file, "rb") as f:
+                    meta_cache = pickle.load(f)
 
             return index_df, meta_cache
         except Exception as e:
@@ -132,7 +122,7 @@ class DASSpool:
             return None, {}
 
     def _save_cache(self) -> None:
-        """Save index to disk."""
+        """Save index and metadata cache to disk."""
         if not self._cache_path or self._index is None:
             return
 
@@ -141,12 +131,15 @@ class DASSpool:
                 self._cache_path.mkdir(parents=True)
 
             index_file = self._cache_path / "index.parquet"
-            # Path objects are not parquet-serializable, convert to strings
             df_to_save = self._index.copy()
             df_to_save["path"] = df_to_save["path"].apply(str)
             df_to_save.to_parquet(index_file)
 
-            # TODO: Persistent metadata cache with DASInventory serialization
+            meta_file = self._cache_path / "meta_cache.pkl"
+            with open(meta_file, "wb") as f:
+                pickle.dump(self._meta_cache, f)
+            # print(f'Saved {len(self._meta_cache)} meta entries')
+
         except Exception as e:
             warnings.warn(f"保存缓存失败: {e}")
 
@@ -161,6 +154,7 @@ class DASSpool:
             if cached_index is not None:
                 self._index = cached_index
                 self._meta_cache.update(cached_meta)
+                # print(f'Loaded {len(self._meta_cache)} meta entries from cache')
 
         # Identify files that need scanning
         if force or self._index is None:

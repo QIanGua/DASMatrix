@@ -16,6 +16,8 @@ import pint
 
 # 创建全局单位注册表
 ureg = pint.UnitRegistry()
+ureg.define("strain = dimensionless")
+ureg.define("strain_rate = 1 / second")
 UnitRegistry = pint.UnitRegistry
 Quantity = ureg.Quantity
 
