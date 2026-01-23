@@ -220,10 +220,10 @@ class H5FormatPlugin(FormatPlugin):
             # 返回 xr.DataArray
             return xr.DataArray(
                 data,
-                dims=["time", "channel"],
+                dims=["time", "distance"],
                 coords={
                     "time": time_coord,
-                    "channel": channel_coord,
+                    "distance": channel_coord,
                 },
                 attrs={
                     "sampling_rate": fs,

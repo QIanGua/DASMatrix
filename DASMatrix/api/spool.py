@@ -204,6 +204,46 @@ class DASSpool:
         """迭代返回 DASFrame 对象"""
         return self.chunk()
 
+    def to_frame(self) -> "DASFrame":
+        """将 Spool 中的所有文件虚拟合并为一个连续的 DASFrame。
+
+        基于 Dask 延迟加载，不会立即读取所有数据到内存。
+        """
+        if self._index is None:
+            self.update()
+
+        if self._index is None or self._index.empty:
+            raise ValueError("Spool 为空，无法转换为 DASFrame")
+
+        # 读取所有 DataArrays
+        data_arrays = []
+        for _, row in self._index.iterrows():
+            da = FormatRegistry.read(row["path"], format_name=self._format)
+            data_arrays.append(da)
+
+        # 沿着 time 维度合并
+        # 注意：这里假设所有文件的通道数和采样率一致
+        # TODO: 处理采样率不一致的情况（重采样）或通道对齐
+        import xarray as xr
+
+        combined_da = xr.concat(data_arrays, dim="time")
+        # Standardize dimension name to distance if it is channel
+        if "channel" in combined_da.dims:
+            combined_da = combined_da.rename({"channel": "distance"})
+        combined_da = combined_da.chunk({"time": "auto", "distance": -1})
+
+        # 获取基础参数
+        first_row = self._index.iloc[0]
+        fs = first_row["sampling_rate"]
+        dx = first_row["channel_spacing"] or 1.0
+
+        # 注入 Inventory 信息（如果有的话）
+        metadata = {}
+        if "inventory" in combined_da.attrs:
+            metadata["inventory"] = combined_da.attrs["inventory"]
+
+        return DASFrame(combined_da, fs=fs, dx=dx, **metadata)
+
     def __len__(self) -> int:
         """返回文件数量"""
         return len(self._files)
