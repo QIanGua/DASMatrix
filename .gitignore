@@ -46,3 +46,4 @@ examples/stft_spectrogram.py
 tmp
 .claude
 scratch/
+.agent/skills/code-simplifier
