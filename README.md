@@ -6,8 +6,8 @@
   
   [![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-  [![CI Status](https://github.com/yourusername/DASMatrix/workflows/CI/badge.svg)](https://github.com/yourusername/DASMatrix/actions)
-  [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://yourusername.github.io/DASMatrix)
+  [![CI Status](https://github.com/QIanGua/DASMatrix/actions/workflows/ci.yml/badge.svg)](https://github.com/QIanGua/DASMatrix/actions/workflows/ci.yml)
+  [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://QIanGua.github.io/DASMatrix)
   [![中文文档](https://img.shields.io/badge/docs-中文-red.svg)](README_cn.md)
 </div>
 
@@ -35,7 +35,7 @@ DASMatrix is a high-performance Python framework specifically designed for Distr
 #### Option 1: Using uv (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/DASMatrix.git
+git clone https://github.com/QIanGua/DASMatrix.git
 cd DASMatrix
 
 # Install with uv (automatically creates virtual environment)
@@ -45,7 +45,7 @@ uv sync
 #### Option 2: Using pip
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/DASMatrix.git
+git clone https://github.com/QIanGua/DASMatrix.git
 cd DASMatrix
 
 # Install with pip
@@ -148,9 +148,9 @@ plt.show()
 
 ## 📚 Documentation
 
-- **[Full Documentation](https://yourusername.github.io/DASMatrix)**: Complete API reference and tutorials
+- **[Full Documentation](https://QIanGua.github.io/DASMatrix)**: Complete API reference and tutorials
 - **[Examples](examples/)**: Practical usage examples
-- **[API Reference](https://yourusername.github.io/DASMatrix/api/)**: Detailed API documentation
+- **[API Reference](https://QIanGua.github.io/DASMatrix/api/)**: Detailed API documentation
 - **[中文文档](README_cn.md)**: Chinese documentation
 
 ## 🏗️ Project Structure
@@ -233,7 +233,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yourusername/DASMatrix&type=Date)](https://star-history.com/#yourusername/DASMatrix&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=QIanGua/DASMatrix&type=Date)](https://star-history.com/#QIanGua/DASMatrix&Date)
 
 ---
 

@@ -6,8 +6,8 @@
   
   [![Python 版本](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
   [![许可证](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-  [![CI 状态](https://github.com/yourusername/DASMatrix/workflows/CI/badge.svg)](https://github.com/yourusername/DASMatrix/actions)
-  [![文档](https://img.shields.io/badge/docs-最新-brightgreen.svg)](https://yourusername.github.io/DASMatrix)
+  [![CI 状态](https://github.com/QIanGua/DASMatrix/actions/workflows/ci.yml/badge.svg)](https://github.com/QIanGua/DASMatrix/actions/workflows/ci.yml)
+  [![文档](https://img.shields.io/badge/docs-最新-brightgreen.svg)](https://QIanGua.github.io/DASMatrix)
   [![English Docs](https://img.shields.io/badge/docs-English-blue.svg)](README.md)
 </div>
 
@@ -35,7 +35,7 @@ DASMatrix 是一个专为分布式声学传感（DAS）数据处理和分析设�
 #### 方式一：使用 uv (推荐)
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/DASMatrix.git
+git clone https://github.com/QIanGua/DASMatrix.git
 cd DASMatrix
 
 # 使用 uv 安装（自动创建虚拟环境）
@@ -45,7 +45,7 @@ uv sync
 #### 方式二：使用 pip
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/DASMatrix.git
+git clone https://github.com/QIanGua/DASMatrix.git
 cd DASMatrix
 
 # 使用 pip 安装
@@ -145,9 +145,9 @@ plt.show()
 
 ## 📚 文档
 
-- **[完整文档](https://yourusername.github.io/DASMatrix)**：完整的 API 参考和教程
+- **[完整文档](https://QIanGua.github.io/DASMatrix)**：完整的 API 参考和教程
 - **[示例](examples/)**：实际使用示例
-- **[API 参考](https://yourusername.github.io/DASMatrix/api/)**：详细的 API 文档
+- **[API 参考](https://QIanGua.github.io/DASMatrix/api/)**：详细的 API 文档
 - **[English Documentation](README.md)**: 英文文档
 
 ## 🏗️ 项目结构
@@ -221,7 +221,7 @@ just fix-all
 
 ## 🌟 Star 历史
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yourusername/DASMatrix&type=Date)](https://star-history.com/#yourusername/DASMatrix&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=QIanGua/DASMatrix&type=Date)](https://star-history.com/#QIanGua/DASMatrix&Date)
 
 ---
 
