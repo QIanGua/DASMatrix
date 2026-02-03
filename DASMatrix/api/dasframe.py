@@ -150,12 +150,12 @@ class DASFrame:
             warnings.warn("Hybrid engine fallback to xarray due to incomplete op log.")
             return self._data.compute().values
 
-        from ..core.computation_graph import ComputationGraph, NodeDomain, OperationNode
+        from ..core.computation_graph import ComputationGraph, Node, NodeDomain, OperationNode
         from ..processing.engine import HybridEngine
 
         base = self._source_data.compute().values
         graph = ComputationGraph.leaf(base)
-        current = graph.root
+        current = cast(Node, graph.root)
         for item in self._op_log:
             node = OperationNode(
                 item["op"],

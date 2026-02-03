@@ -40,7 +40,7 @@ def test_prodml_inventory_scan(dummy_prodml_file):
     assert isinstance(inv, DASInventory)
     assert inv.project_name == "Integration Test"
     assert inv.acquisition.n_channels == 10
-    assert cast(Any, inv.interrogator).sampling_rate == 500.0
+    assert inv.interrogator.sampling_rate == 500.0
     assert cast(Any, inv.fiber).channel_spacing == 2.0
     assert inv.acquisition.start_time.year == 2024
 

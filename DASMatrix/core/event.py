@@ -7,7 +7,7 @@ High-performance event catalog based on Polars.
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 
 import polars as pl
 from pydantic import BaseModel, ConfigDict, Field
@@ -46,7 +46,9 @@ class EventCatalog:
                 }
             )
         elif isinstance(events, list):
-            data = [e.model_dump() for e in events]
+            if events and not isinstance(events[0], DASEvent):
+                raise TypeError("events must be List[DASEvent]")
+            data = [cast(DASEvent, e).model_dump() for e in events]
             self.df = pl.DataFrame(data)
         elif isinstance(events, pl.DataFrame):
             self.df = events
