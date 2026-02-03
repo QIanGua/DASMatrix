@@ -179,18 +179,26 @@ class HybridEngine:
             return scipy_median_filter(data, size=size)
 
         elif op == "fft":
-            return np.abs(np.fft.fft(data, axis=0))
+            # Match DASFrame.fft(): real FFT magnitude along time axis
+            return np.abs(np.fft.rfft(data, axis=0))
 
         elif op == "stft":
             nperseg = kwargs.get("nperseg", 256)
             noverlap = kwargs.get("noverlap", nperseg // 2)
             fs = kwargs.get("fs", 1000)
+            window = kwargs.get("window", "hann")
             # 对每个通道计算 STFT
             n_channels = data.shape[1] if data.ndim > 1 else 1
             results = []
             for ch in range(n_channels):
                 ch_data = data[:, ch] if data.ndim > 1 else data
-                f, t, Zxx = scipy_signal.stft(ch_data, fs=fs, nperseg=nperseg, noverlap=noverlap)
+                f, t, Zxx = scipy_signal.stft(
+                    ch_data,
+                    fs=fs,
+                    nperseg=nperseg,
+                    noverlap=noverlap,
+                    window=window,
+                )
                 results.append(np.abs(Zxx))
             # 返回 (freq, time, channel)
             return np.stack(results, axis=-1)

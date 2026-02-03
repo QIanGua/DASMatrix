@@ -71,17 +71,23 @@ class DATReader(DataReader):
         self.ValidateFile(file_path)
 
         try:
+            # DAT 原始数据一般为 16-bit 整数
+            dtype = "<i2" if self.sampling_config.byte_order == "little" else ">i2"
+
             # 计算总样本数
             file_size = os.path.getsize(file_path)
-            item_size = np.dtype(np.float32).itemsize
+            item_size = np.dtype(dtype).itemsize
             total_items = file_size // item_size
             n_rows = total_items // self.channels
 
-            data = np.memmap(file_path, dtype=np.float32, mode="r", shape=(n_rows, self.channels))
+            data = np.memmap(file_path, dtype=dtype, mode="r", shape=(n_rows, self.channels))
 
             if target_col:
                 data = data[:, target_col]
 
+            # 转换为物理量并返回延迟数组
+            data = da.from_array(data, chunks="auto")
+            data = (data.astype(np.float64) * np.pi) / (2**13)
             return data
         except Exception as e:
             self.logger.error(f"读取 DAT 文件失败: {e}")
@@ -97,14 +103,40 @@ class H5Reader(DataReader):
 
         try:
             with h5py.File(file_path, "r") as f:
-                # 假设数据在 "Data" 或 "DAS" 组下
-                data_key = "Data" if "Data" in f else "DAS"
-                if data_key not in f:
-                    # 尝试查找第一个数据集
-                    for key in f.keys():
-                        if isinstance(f[key], h5py.Dataset):
-                            data_key = key
-                            break
+                data_key = None
+                # 常见路径优先
+                for key in [
+                    "Acquisition/Raw[0]/RawData",
+                    "Acquisition/Raw[0]",
+                    "data",
+                    "Data",
+                    "raw_data",
+                    "DAS/data",
+                    "DAS",
+                ]:
+                    if key in f and isinstance(f[key], h5py.Dataset):
+                        data_key = key
+                        break
+
+                # 递归查找第一个 Dataset
+                if data_key is None:
+
+                    def _find_dataset(group: h5py.Group, prefix: str = "") -> Optional[str]:
+                        for name in group.keys():
+                            item = group[name]
+                            path = f"{prefix}/{name}" if prefix else name
+                            if isinstance(item, h5py.Dataset):
+                                return path
+                            if isinstance(item, h5py.Group):
+                                found = _find_dataset(item, path)
+                                if found:
+                                    return found
+                        return None
+
+                    data_key = _find_dataset(f)
+
+                if data_key is None:
+                    raise KeyError("无法在 H5 文件中找到有效的数据集")
 
                 obj = f[data_key]
                 if isinstance(obj, h5py.Dataset):
@@ -112,6 +144,10 @@ class H5Reader(DataReader):
                         data = obj[:, target_col]
                     else:
                         data = obj[:]
+
+                    # 转换为物理量并返回延迟数组
+                    data = da.from_array(data, chunks="auto")
+                    data = (data / 4) * (np.pi / (2**13))
                     return data
                 else:
                     raise TypeError(f"Expected Dataset at {data_key}, found {type(obj)}")
@@ -147,7 +183,8 @@ class MiniSEEDReader(DataReader):
         self.ValidateFile(file_path)
 
         try:
-            st = obspy.read(str(file_path))
+            st = obspy.read(str(file_path), format="MSEED")
+            st.merge()
             data = np.stack([tr.data for tr in st], axis=1)
             if target_col:
                 data = data[:, target_col]
@@ -180,7 +217,7 @@ class DASReader:
         self.data_type = data_type
         self.logger = logging.getLogger(__name__)
 
-        # 根据数据类型选择合适的读取器
+        # 旧 Reader 保留以兼容旧接口，但实际读取走 FormatRegistry
         reader_map = {
             DataType.DAT: DATReader,
             DataType.H5: H5Reader,
@@ -204,8 +241,36 @@ class DASReader:
         Returns:
             np.ndarray | da.Array: 读取的原始数据
         """
+        from .formats import FormatRegistry
+
+        format_map = {
+            DataType.DAT: "DAT",
+            DataType.H5: "H5",
+            DataType.SEGY: "SEGY",
+            DataType.MINISEED: "MINISEED",
+        }
+        fmt = format_map.get(self.data_type)
+        if fmt is None:
+            raise ValueError(f"不支持的数据类型: {self.data_type}")
+
+        kwargs: dict = {"format_name": fmt, "lazy": True}
+        if target_col:
+            kwargs["channels"] = target_col
+
+        if self.data_type == DataType.DAT:
+            kwargs.update(
+                {
+                    "n_channels": self.sampling_config.channels,
+                    "sampling_rate": self.sampling_config.fs,
+                    "byte_order": self.sampling_config.byte_order,
+                }
+            )
+
         try:
-            return self.reader.ReadRawData(file_path, target_col)
+            data = FormatRegistry.read(Path(file_path), **kwargs)
+            if isinstance(data, xr.DataArray):
+                return data.data
+            return data
         except Exception as e:
             self.logger.error(f"读取数据时发生错误: {e}, 文件路径: {file_path}")
             raise

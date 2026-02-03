@@ -49,9 +49,21 @@ def read(
     """
     from ..acquisition.formats import FormatRegistry
 
+    # DAT 文件必须指定 fs 和 channels
+    file_path = Path(path)
+    if file_path.suffix.lower() == ".dat":
+        if fs is None or channels is None:
+            raise ValueError("DAT 文件读取必须提供 fs 和 channels")
+
     # 使用 FormatRegistry 统一读取
     # 这将返回带有 attrs['inventory'] 的 xr.DataArray
-    daa = FormatRegistry.read(path, fs=fs, **kwargs)
+    read_kwargs: dict[str, Any] = {"fs": fs, **kwargs}
+    if channels is not None:
+        read_kwargs["channels"] = channels
+    if byte_order:
+        read_kwargs["byte_order"] = byte_order
+
+    daa = FormatRegistry.read(path, **read_kwargs)
 
     # 提取关键参数
     attrs = getattr(daa, "attrs", {})

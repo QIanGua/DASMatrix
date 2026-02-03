@@ -9,6 +9,7 @@ import xarray as xr
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from scipy import signal
+from scipy.ndimage import median_filter as scipy_median_filter
 
 from ..core.inventory import DASInventory
 
@@ -26,6 +27,9 @@ class DASFrame:
     _fs: float
     _dx: float
     _metadata: dict[str, Any]
+    _op_log: List[dict[str, Any]]
+    _op_log_complete: bool
+    _source_data: xr.DataArray
 
     def __init__(
         self,
@@ -35,11 +39,16 @@ class DASFrame:
         **metadata: Any,
     ) -> None:
         """Initialize DASFrame."""
+        # Avoid passing fs/dx through metadata to prevent duplicate kwargs
+        metadata = {k: v for k, v in metadata.items() if k not in ("fs", "dx")}
         if isinstance(data, DASFrame):
             self._data = data._data
             self._fs = data.fs
             self._dx = getattr(data, "_dx", dx)
             self._metadata = {**data._metadata, **metadata}
+            self._op_log = list(getattr(data, "_op_log", []))
+            self._op_log_complete = bool(getattr(data, "_op_log_complete", True))
+            self._source_data = getattr(data, "_source_data", data._data)
             if "inventory" in self._metadata:
                 inv = self._metadata["inventory"]
                 if isinstance(inv, dict):
@@ -56,10 +65,13 @@ class DASFrame:
                 self._metadata["inventory"] = DASInventory.model_validate(inv)
 
         if isinstance(data, xr.DataArray):
-            if "time" in data.dims and data.dims[0] != "time":
+            if "time" in data.dims and data.dims[0] != "time" and "frequency" not in data.dims:
                 data = data.transpose("time", ...)
             self._data = data
             self._metadata = {**data.attrs, **metadata}
+            # Normalize metadata to keep fs/dx only in attrs, not kwargs
+            self._metadata.pop("fs", None)
+            self._metadata.pop("dx", None)
             if "sampling_rate" in self._metadata and fs is None:
                 self._fs = float(self._metadata["sampling_rate"])
             if "channel_spacing" in self._metadata and dx == 1.0:
@@ -85,6 +97,29 @@ class DASFrame:
             if not self._data.chunks:
                 self._data = self._data.chunk({"time": "auto", "distance": -1})
 
+        self._op_log = []
+        self._op_log_complete = True
+        self._source_data = self._data
+
+    def _spawn(
+        self,
+        data: xr.DataArray,
+        op: Optional[str] = None,
+        op_kwargs: Optional[dict[str, Any]] = None,
+        op_supported: bool = True,
+    ) -> "DASFrame":
+        """Create a new DASFrame while preserving source data and op log."""
+        frame = DASFrame(data, self._fs, self._dx, **self._metadata)
+        frame._source_data = self._source_data
+        frame._op_log = list(self._op_log)
+        frame._op_log_complete = self._op_log_complete
+        if op is not None:
+            if frame._op_log_complete and op_supported:
+                frame._op_log.append({"op": op, "kwargs": op_kwargs or {}})
+            else:
+                frame._op_log_complete = False
+        return frame
+
     @property
     def data(self) -> xr.DataArray:
         """Access underlying xarray DataArray."""
@@ -104,9 +139,35 @@ class DASFrame:
         """Get shape of data."""
         return self._data.shape
 
-    def collect(self) -> np.ndarray:
+    def collect(self, engine: str = "xarray") -> np.ndarray:
         """Compute and return numpy array."""
-        return self._data.compute().values
+        if engine == "xarray":
+            return self._data.compute().values
+        if engine != "hybrid":
+            raise ValueError(f"Unsupported engine: {engine}")
+
+        if not self._op_log_complete or not self._op_log:
+            warnings.warn("Hybrid engine fallback to xarray due to incomplete op log.")
+            return self._data.compute().values
+
+        from ..core.computation_graph import ComputationGraph, NodeDomain, OperationNode
+        from ..processing.engine import HybridEngine
+
+        base = self._source_data.compute().values
+        graph = ComputationGraph.leaf(base)
+        current = graph.root
+        for item in self._op_log:
+            node = OperationNode(
+                item["op"],
+                [current],
+                kwargs=item.get("kwargs", {}),
+                domain=NodeDomain.SIGNAL,
+            )
+            graph = graph.add_node(node)
+            current = node
+
+        engine_impl = HybridEngine()
+        return engine_impl.compute(graph)
 
     def astype(self, dtype: Any) -> "DASFrame":
         """Cast data to a new type."""
@@ -119,7 +180,7 @@ class DASFrame:
     def slice(self, t: slice = slice(None), x: slice = slice(None)) -> "DASFrame":
         """Slice data."""
         sliced = self._data.isel(time=t, distance=x)
-        return DASFrame(sliced, self._fs, self._dx, **self._metadata)
+        return self._spawn(sliced, op="slice", op_kwargs={"t": t, "x": x})
 
     def bandpass(self, low: float, high: float, order: int = 4) -> "DASFrame":
         """Apply bandpass filter."""
@@ -137,10 +198,15 @@ class DASFrame:
             input_core_dims=[["time"]],
             output_core_dims=[["time"]],
             dask="parallelized",
+            dask_gufunc_kwargs={"allow_rechunk": True},
             output_dtypes=[data.dtype],
         )
 
-        return DASFrame(filtered, self._fs, self._dx, **self._metadata)
+        return self._spawn(
+            filtered,
+            op="bandpass",
+            op_kwargs={"low": low, "high": high, "order": order, "fs": self._fs},
+        )
 
     def lowpass(self, cutoff: float, order: int = 4) -> "DASFrame":
         """Apply lowpass filter."""
@@ -159,7 +225,11 @@ class DASFrame:
             dask="parallelized",
             output_dtypes=[self._data.dtype],
         )
-        return DASFrame(filtered, self._fs, self._dx, **self._metadata)
+        return self._spawn(
+            filtered,
+            op="lowpass",
+            op_kwargs={"cutoff": cutoff, "order": order, "fs": self._fs},
+        )
 
     def highpass(self, cutoff: float, order: int = 4) -> "DASFrame":
         """Apply highpass filter."""
@@ -178,7 +248,11 @@ class DASFrame:
             dask="parallelized",
             output_dtypes=[self._data.dtype],
         )
-        return DASFrame(filtered, self._fs, self._dx, **self._metadata)
+        return self._spawn(
+            filtered,
+            op="highpass",
+            op_kwargs={"cutoff": cutoff, "order": order, "fs": self._fs},
+        )
 
     def notch(self, freq: float, Q: float = 30) -> "DASFrame":
         """陷波滤波器，移除特定频率成分。"""
@@ -196,7 +270,38 @@ class DASFrame:
             dask="parallelized",
             output_dtypes=[self._data.dtype],
         )
-        return DASFrame(filtered, self._fs, self._dx, **self._metadata)
+        return self._spawn(
+            filtered,
+            op="notch",
+            op_kwargs={"freq": freq, "Q": Q, "fs": self._fs},
+        )
+
+    def median_filter(self, k: int = 5, axis: str = "time") -> "DASFrame":
+        """中值滤波。"""
+        if axis == "time":
+            size = (k, 1)
+        else:
+            size = (1, k)
+
+        def _median_filter_func(block, size_val):
+            return scipy_median_filter(block, size=size_val)
+
+        filtered = xr.apply_ufunc(
+            _median_filter_func,
+            self._data,
+            kwargs={"size_val": size},
+            input_core_dims=[["time", "distance"]],
+            output_core_dims=[["time", "distance"]],
+            dask="parallelized",
+            dask_gufunc_kwargs={"allow_rechunk": True},
+            output_dtypes=[self._data.dtype],
+        )
+
+        return self._spawn(
+            filtered,
+            op="median_filter",
+            op_kwargs={"k": k, "axis": axis},
+        )
 
     def detrend(self, axis: str = "time") -> "DASFrame":
         """Detrend data."""
@@ -210,16 +315,27 @@ class DASFrame:
             input_core_dims=[[axis]],
             output_core_dims=[[axis]],
             dask="parallelized",
+            dask_gufunc_kwargs={"allow_rechunk": True},
             output_dtypes=[self._data.dtype],
         )
 
-        return DASFrame(detrended, self._fs, self._dx, **self._metadata)
+        op_supported = axis == "time"
+        return self._spawn(
+            detrended,
+            op="detrend",
+            op_supported=op_supported,
+        )
 
     def demean(self, axis: str = "time") -> "DASFrame":
         """Remove mean value along specified axis."""
         dim = "time" if axis == "time" else "distance"
         demeaned = self._data - self._data.mean(dim=dim)
-        return DASFrame(demeaned, self._fs, self._dx, **self._metadata)
+        op_supported = axis == "time"
+        return self._spawn(
+            demeaned,
+            op="demean",
+            op_supported=op_supported,
+        )
 
     def normalize(self, method: str = "minmax") -> "DASFrame":
         """归一化。"""
@@ -235,7 +351,11 @@ class DASFrame:
             range_val = xr.where(range_val == 0, 1.0, range_val)
             normalized = 2 * (self._data - min_val) / range_val - 1
 
-        return DASFrame(normalized, self._fs, self._dx, **self._metadata)
+        return self._spawn(
+            normalized,
+            op="normalize",
+            op_kwargs={"method": method},
+        )
 
     def any(self, axis: Optional[Union[int, str]] = None) -> Union[bool, np.ndarray]:
         """Check if any element is True."""
@@ -311,7 +431,7 @@ class DASFrame:
         spectrum = spectrum.assign_coords(frequency=freqs)
         spectrum = spectrum.transpose("frequency", "distance")
 
-        return DASFrame(spectrum, self._fs, self._dx, **self._metadata)
+        return self._spawn(spectrum, op="fft")
 
     def hilbert(self) -> "DASFrame":
         """希尔伯特变换，返回解析信号。"""
@@ -327,7 +447,7 @@ class DASFrame:
             dask="parallelized",
             output_dtypes=[complex],
         )
-        return DASFrame(analytical, self._fs, self._dx, **self._metadata)
+        return self._spawn(analytical, op="hilbert")
 
     def envelope(self) -> "DASFrame":
         """提取信号包络。"""
@@ -342,11 +462,11 @@ class DASFrame:
     def scale(self, factor: float = 1.0) -> "DASFrame":
         """Scale amplitude."""
         scaled = self._data * factor
-        return DASFrame(scaled, self._fs, self._dx, **self._metadata)
+        return self._spawn(scaled, op="scale", op_kwargs={"factor": factor})
 
     def abs(self) -> "DASFrame":
         """Absolute value."""
-        return DASFrame(np.abs(self._data), self._fs, self._dx, **self._metadata)
+        return self._spawn(np.abs(self._data), op="abs")
 
     def integrate(self) -> "DASFrame":
         """Time domain integration."""
@@ -361,41 +481,43 @@ class DASFrame:
 
     def stft(self, nperseg: int = 256, noverlap: Optional[int] = None, window: str = "hann") -> "DASFrame":
         """短时傅立叶变换，进行时频分析。"""
-        from scipy.signal import ShortTimeFFT, get_window
+        from scipy import signal as scipy_signal
 
         if noverlap is None:
             noverlap = nperseg // 2
 
-        hop = nperseg - noverlap
-        win = get_window(window, nperseg)
-        SFT = ShortTimeFFT(win, hop=hop, fs=self._fs, scale_to="magnitude")
+        data = self.collect()
+        n_channels = data.shape[1] if data.ndim > 1 else 1
+        results = []
+        for ch in range(n_channels):
+            ch_data = data[:, ch] if data.ndim > 1 else data
+            f, t, Zxx = scipy_signal.stft(
+                ch_data,
+                fs=self._fs,
+                nperseg=nperseg,
+                noverlap=noverlap,
+                window=window,
+            )
+            results.append(np.abs(Zxx).astype(np.float32))
 
-        def _stft_block(block, sft_obj):
-            Zxx = sft_obj.stft(block)
-            return np.abs(Zxx).astype(np.float32)
-
-        freqs = SFT.f
-        n_t = self._data.sizes["time"]
-        t_coords = SFT.t(n_t)
-
-        stft_data = xr.apply_ufunc(
-            _stft_block,
-            self._data,
-            kwargs={"sft_obj": SFT},
-            input_core_dims=[["time"]],
-            output_core_dims=[["frequency", "time_stft"]],
-            exclude_dims=set(["time"]),
-            dask="parallelized",
-            output_dtypes=[np.float32],
-            dask_gufunc_kwargs={"output_sizes": {"frequency": len(freqs), "time_stft": len(t_coords)}},
+        stft_arr = np.stack(results, axis=-1)
+        stft_data = xr.DataArray(
+            stft_arr,
+            dims=("frequency", "time", "distance"),
+            coords={
+                "frequency": f,
+                "time": t,
+                "distance": self._data.distance.values,
+            },
+            attrs={**self._metadata, "fs": self._fs, "dx": self._dx},
         )
 
-        stft_data = stft_data.rename({"time_stft": "time"})
-        stft_data = stft_data.assign_coords({"frequency": freqs, "time": t_coords, "distance": self._data.distance})
-
-        stft_data = stft_data.transpose("frequency", "time", "distance")
-
-        return DASFrame(stft_data, self._fs, self._dx, **self._metadata)
+        return self._spawn(
+            stft_data,
+            op="stft",
+            op_kwargs={"nperseg": nperseg, "noverlap": noverlap, "fs": self._fs, "window": window},
+            op_supported=True,
+        )
 
     def fk_filter(
         self,
@@ -424,14 +546,18 @@ class DASFrame:
             dask="parallelized",
             output_dtypes=[self._data.dtype],
         )
-        return DASFrame(filtered, self._fs, dx, **self._metadata)
+        return self._spawn(
+            filtered,
+            op="fk_filter",
+            op_kwargs={"v_min": v_min, "v_max": v_max, "dx": dx, "fs": self._fs},
+        )
 
     def threshold_detect(self, threshold: Optional[float] = None, sigma: float = 3.0) -> "DASFrame":
         """阈值检测。"""
         if threshold is None:
-            mean_val = self._data.mean()
-            std_val = self._data.std()
-            threshold = float(mean_val.compute() + sigma * std_val.compute())
+            mean_val = self._data.mean().compute()
+            std_val = self._data.std().compute()
+            threshold = float(mean_val + sigma * std_val)
 
         detected = np.abs(self._data) > threshold
         return DASFrame(detected, self._fs, self._dx, **self._metadata)
@@ -455,12 +581,18 @@ class DASFrame:
 
         return DASFrame(ratio, self._fs, self._dx, **self._metadata)
 
-    def trigger_detection(self, threshold: float, trigger_off: Optional[float] = None) -> "EventCatalog":
+    def trigger_detection(
+        self,
+        threshold: float,
+        trigger_off: Optional[float] = None,
+        lazy: bool = True,
+    ) -> "EventCatalog":
         """基于阈值检测事件并返回 EventCatalog。
 
         Args:
             threshold: 触发阈值。
             trigger_off: 结束阈值 (默认为 threshold)。
+            lazy: 是否避免加载完整数据 (默认 True)。
 
         Returns:
             EventCatalog: 包含检测到的事件列表。
@@ -473,14 +605,17 @@ class DASFrame:
             trigger_off = threshold
 
         # 1. 获取检测掩码 (Lazy)
-        mask = self.abs().collect() > threshold
+        if lazy:
+            mask = np.abs(self._data) > threshold
+        else:
+            mask = self.abs().collect() > threshold
 
         # 2. 简单的连通域分析或逐通道触发
         # 为了性能，这里先实现简单的逐通道触发逻辑
         # TODO: 使用 skimage.measure.label 进行 2D 连通域标记以支持时空事件
 
         events = []
-        nt, nx = mask.shape
+        nt = int(mask.shape[0])
         t_coords = self._data.time.values
 
         # 获取绝对开始时间
@@ -503,7 +638,10 @@ class DASFrame:
 
         # 简化策略：只要任意通道触发，就算一个事件
         # 对空间轴取 max，得到时间轴上的 1D 触发序列
-        time_trigger = np.any(mask, axis=1).astype(int)
+        if lazy:
+            time_trigger = mask.any(dim="distance").compute().values.astype(int)
+        else:
+            time_trigger = np.any(mask, axis=1).astype(int)
         diff = np.diff(time_trigger, prepend=0)
 
         starts = np.where(diff == 1)[0]
@@ -511,13 +649,16 @@ class DASFrame:
 
         # 处理边界
         if len(starts) > len(ends):
-            ends = np.append(ends, nt - 1)
+            ends = np.append(ends, nt)
 
         for i, (s, e) in enumerate(zip(starts, ends)):
             # 找到触发的通道范围
-            event_slice = mask[s:e, :]
-            # 哪些通道在这段时间内触发过
-            ch_mask = np.any(event_slice, axis=0)
+            if lazy:
+                event_slice = mask.isel(time=slice(s, e))
+                ch_mask = event_slice.any(dim="time").compute().values
+            else:
+                event_slice = mask[s:e, :]
+                ch_mask = np.any(event_slice, axis=0)
             ch_indices = np.where(ch_mask)[0]
 
             if len(ch_indices) == 0:
@@ -583,10 +724,19 @@ class DASFrame:
         ch: int = 0,
         title: str = "Spectrum",
         ax: Optional[Axes] = None,
+        max_samples: int = 20000,
         **kwargs: Any,
     ) -> Figure:
         """绘制频谱图 (FFT)。"""
-        ch_data = self._data.isel(distance=ch).compute().values
+        ch_data = self._data.isel(distance=ch)
+        n = int(ch_data.shape[0])
+        step = 1
+        if max_samples and n > max_samples:
+            step = int(np.ceil(n / max_samples))
+            ch_data = ch_data.isel(time=slice(0, n, step))
+
+        ch_data = ch_data.compute().values
+        fs_eff = self._fs / step
 
         from ..visualization.das_visualizer import SpectrumPlot
 
@@ -594,8 +744,8 @@ class DASFrame:
         from scipy import signal
 
         n = len(ch_data)
-        nperseg = min(2048, n // 4)
-        freqs, psd = signal.welch(ch_data, fs=self._fs, nperseg=nperseg, scaling="spectrum")
+        nperseg = min(2048, max(8, n // 4))
+        freqs, psd = signal.welch(ch_data, fs=fs_eff, nperseg=nperseg, scaling="spectrum")
         mags = np.sqrt(psd)
 
         fig = plotter.plot(freqs, mags, title=title, ax=ax, **kwargs)
@@ -608,17 +758,26 @@ class DASFrame:
         window_size: int = 1024,
         overlap: float = 0.75,
         ax: Optional[Axes] = None,
+        max_samples: int = 20000,
         **kwargs: Any,
     ) -> Figure:
         """绘制时频图 (STFT)。"""
-        ch_data = self._data.isel(distance=ch).compute().values
+        ch_data = self._data.isel(distance=ch)
+        n = int(ch_data.shape[0])
+        step = 1
+        if max_samples and n > max_samples:
+            step = int(np.ceil(n / max_samples))
+            ch_data = ch_data.isel(time=slice(0, n, step))
+
+        ch_data = ch_data.compute().values
+        fs_eff = self._fs / step
 
         from ..visualization.das_visualizer import SpectrogramPlot
 
         plotter = SpectrogramPlot()
         fig = plotter.plot(
             ch_data,
-            self._fs,
+            fs_eff,
             window_size=window_size,
             overlap=overlap,
             title=title,
@@ -745,19 +904,35 @@ class DASFrame:
         title: str = "F-K Spectrum",
         v_lines: Optional[List[float]] = None,
         ax: Optional[Axes] = None,
+        max_samples: int = 2000,
+        max_channels: int = 512,
         **kwargs: Any,
     ) -> Figure:
         """绘制 FK 谱图。"""
-        data = self.collect()
+        frame = self
+        nt, nx = frame.shape
+        t_step = 1
+        x_step = 1
+        if max_samples and nt > max_samples:
+            t_step = int(np.ceil(nt / max_samples))
+            frame = frame.slice(t=slice(0, nt, t_step))
+        if max_channels and nx > max_channels:
+            x_step = int(np.ceil(nx / max_channels))
+            frame = frame.slice(x=slice(0, nx, x_step))
+
+        data = frame.collect()
 
         from ..config.sampling_config import SamplingConfig
         from ..processing.das_processor import DASProcessor
 
-        config = SamplingConfig(fs=self._fs, channels=data.shape[1])
+        fs_eff = self._fs / t_step
+        dx_eff = dx * x_step
+
+        config = SamplingConfig(fs=fs_eff, channels=data.shape[1])
         processor = DASProcessor(config)
 
         fk, freqs, k = processor.f_k_transform(data)
-        k = k / dx
+        k = k / dx_eff
 
         from ..visualization.das_visualizer import FKPlot
 

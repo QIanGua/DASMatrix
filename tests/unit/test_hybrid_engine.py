@@ -64,6 +64,51 @@ def test_chain_fusion_correctness(sample_data, df):
     np.testing.assert_allclose(result, expected, rtol=1e-3, atol=1e-3)
 
 
+def test_collect_hybrid_engine_matches_xarray(sample_data, df):
+    """Ensure hybrid collect matches xarray collect for supported ops."""
+    pipeline = df.demean(axis="time").abs().scale(0.5)
+    expected = pipeline.collect(engine="xarray")
+    result = pipeline.collect(engine="hybrid")
+
+    np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-5)
+
+
+def test_collect_hybrid_fft_matches_xarray(sample_data, df):
+    """Ensure hybrid FFT matches xarray FFT for supported ops."""
+    pipeline = df.fft()
+    expected = pipeline.collect(engine="xarray")
+    result = pipeline.collect(engine="hybrid")
+
+    np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-5)
+
+
+def test_collect_hybrid_fk_filter_matches_xarray(sample_data, df):
+    """Ensure hybrid FK filter matches xarray FK filter for supported ops."""
+    pipeline = df.fk_filter(v_min=10.0, v_max=100.0, dx=1.0)
+    expected = pipeline.collect(engine="xarray")
+    result = pipeline.collect(engine="hybrid")
+
+    np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-5)
+
+
+def test_collect_hybrid_median_filter_matches_xarray(sample_data, df):
+    """Ensure hybrid median filter matches xarray median filter for supported ops."""
+    pipeline = df.median_filter(k=3, axis="time")
+    expected = pipeline.collect(engine="xarray")
+    result = pipeline.collect(engine="hybrid")
+
+    np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-5)
+
+
+def test_collect_hybrid_stft_matches_xarray(sample_data, df):
+    """Ensure hybrid STFT matches xarray STFT for supported ops."""
+    pipeline = df.stft(nperseg=64, noverlap=32, window="hann")
+    expected = pipeline.collect(engine="xarray")
+    result = pipeline.collect(engine="hybrid")
+
+    np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-5)
+
+
 def test_bandpass_placeholder(sample_data, df):
     """Test bandpass (placeholder test)."""
     # Just ensure it runs without error and returns correct shape

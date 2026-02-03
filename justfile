@@ -8,7 +8,8 @@ default:
 
 # Run unit tests
 test:
-    uv run pytest tests
+    # Use a writable Matplotlib cache to avoid hangs on first import
+    MPLCONFIGDIR=${MPLCONFIGDIR:-/tmp/mplcache} MPLBACKEND=${MPLBACKEND:-Agg} uv run pytest tests
 
 # Run quick checks (for pre-push hooks - no fixes)
 quick-check:

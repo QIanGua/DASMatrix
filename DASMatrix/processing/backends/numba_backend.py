@@ -24,6 +24,9 @@ class NumbaBackend:
         Returns:
             np.ndarray: 计算结果
         """
+        if self._should_fallback(node):
+            return self._execute_sequential(node, data)
+
         # 1. 预计算阶段 (Pre-computation for Reduction Ops)
         # 某些算子如 detrend, demean 需要预先扫描数据获取全局参数
         aux_params = self._prepare_aux_params(node, data)
@@ -48,29 +51,117 @@ class NumbaBackend:
 
         return out
 
+    def _should_fallback(self, node: FusionNode) -> bool:
+        """判断是否需要回退到顺序执行以保证正确性。"""
+        ops = [op.operation for op in node.fused_nodes]
+        stats_ops = {"detrend", "demean", "normalize"}
+
+        detrend_seen = False
+        for i, op in enumerate(ops):
+            if op == "detrend":
+                detrend_seen = True
+                continue
+            if op in stats_ops and detrend_seen:
+                # 统计类操作出现在 detrend 之后，当前无法正确预计算
+                return True
+            if op == "abs":
+                # abs 之后若再做统计类操作，无法预计算
+                if any(next_op in stats_ops for next_op in ops[i + 1 :]):
+                    return True
+        return False
+
+    def _execute_sequential(self, node: FusionNode, data: np.ndarray) -> np.ndarray:
+        """顺序执行融合节点中的操作，确保正确性。"""
+        from scipy import signal as scipy_signal
+
+        result = data
+        for op in node.fused_nodes:
+            if op.operation == "detrend":
+                result = scipy_signal.detrend(result, axis=0)
+            elif op.operation == "demean":
+                result = result - np.mean(result, axis=0, keepdims=True)
+            elif op.operation == "abs":
+                result = np.abs(result)
+            elif op.operation == "scale":
+                factor = op.kwargs.get("factor", 1.0)
+                result = result * factor
+            elif op.operation == "normalize":
+                method = op.kwargs.get("method", "minmax")
+                if method == "zscore":
+                    mean = np.mean(result, axis=0, keepdims=True)
+                    std = np.std(result, axis=0, keepdims=True)
+                    std = np.where(std == 0, 1, std)
+                    result = (result - mean) / std
+                else:
+                    min_val = np.min(result, axis=0, keepdims=True)
+                    max_val = np.max(result, axis=0, keepdims=True)
+                    range_val = max_val - min_val
+                    range_val = np.where(range_val == 0, 1, range_val)
+                    result = 2 * (result - min_val) / range_val - 1
+        return result
+
     def _prepare_aux_params(self, node: FusionNode, data: np.ndarray) -> List[np.ndarray]:
         """使用 Numba 加速的统计预计算。"""
-        n_samples, n_channels = data.shape
-        params = []
+        params: List[np.ndarray] = []
 
         # 检查是否需要统计信息
         needs_detrend = any(op.operation == "detrend" for op in node.fused_nodes)
         needs_demean = any(op.operation == "demean" for op in node.fused_nodes)
         needs_normalize = any(op.operation == "normalize" for op in node.fused_nodes)
 
-        if needs_detrend or needs_demean or needs_normalize:
-            # 调用高性能 JIT 辅助函数
-            return self._compute_stats_numba(data, needs_detrend, needs_demean, needs_normalize)
+        if not (needs_detrend or needs_demean or needs_normalize):
+            return params
+
+        # 统一计算统计量
+        compute_mean = needs_demean or needs_normalize
+        compute_std = needs_normalize
+        ks, bs, means, stds = self._compute_stats_numba(data, needs_detrend, compute_mean, compute_std)
+
+        # 按融合顺序组装辅助参数，避免顺序错位
+        # 仅支持在 affine 变换后进行统计操作的安全情况
+        a = None
+        c = None
+        if compute_mean or needs_detrend:
+            a = np.ones(data.shape[1], dtype=data.dtype)
+            c = np.zeros_like(a)
+
+        for op in node.fused_nodes:
+            if op.operation == "detrend":
+                k_adj = ks
+                b_adj = bs
+                if a is not None and c is not None:
+                    k_adj = a * ks
+                    b_adj = a * bs + c
+                params.extend([k_adj, b_adj])
+            elif op.operation == "demean":
+                if a is None or c is None:
+                    params.append(means)
+                else:
+                    mean_curr = a * means + c
+                    params.append(mean_curr)
+                    c = c - mean_curr
+            elif op.operation == "normalize":
+                if a is None or c is None:
+                    params.extend([means, stds])
+                else:
+                    mean_curr = a * means + c
+                    std_curr = np.abs(a) * stds
+                    params.extend([mean_curr, std_curr])
+                    a = a / std_curr
+                    c = (c - mean_curr) / std_curr
 
         return params
 
     @staticmethod
     @numba.njit(parallel=True, fastmath=True)
-    def _compute_stats_numba(data, compute_detrend: bool, compute_demean: bool, compute_normalize: bool):
+    def _compute_stats_numba(data, compute_detrend: bool, compute_mean: bool, compute_std: bool):
         n_samples, n_channels = data.shape
         dtype = data.dtype
 
-        results = []
+        ks = np.empty(0, dtype=dtype)
+        bs = np.empty(0, dtype=dtype)
+        means = np.empty(0, dtype=dtype)
+        stds = np.empty(0, dtype=dtype)
 
         if compute_detrend:
             # Linear regression stats
@@ -95,10 +186,7 @@ class NumbaBackend:
                 ks[j] = k
                 bs[j] = b
 
-            results.append(ks)
-            results.append(bs)
-
-        if compute_normalize:
+        if compute_std:
             # Z-score needs mean and std
             means = np.zeros(n_channels, dtype=dtype)
             stds = np.zeros(n_channels, dtype=dtype)
@@ -117,19 +205,15 @@ class NumbaBackend:
                 variance = m2 / n_samples
                 stds[j] = np.sqrt(variance) if variance > 0 else 1.0
 
-            results.append(means)
-            results.append(stds)
-
-        elif compute_demean:
+        elif compute_mean:
             means = np.zeros(n_channels, dtype=dtype)
             for j in numba.prange(n_channels):  # type: ignore
                 s_y = 0.0
                 for i in range(n_samples):
                     s_y += data[i, j]
                 means[j] = s_y / n_samples
-            results.append(means)
 
-        return results
+        return ks, bs, means, stds
 
     def _get_kernel_signature(self, node: FusionNode) -> str:
         sig = "fuse"

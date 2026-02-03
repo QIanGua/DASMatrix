@@ -64,7 +64,7 @@ class EventCatalog:
 
     def to_csv(self, path: Union[str, Path]) -> None:
         """Save catalog to CSV."""
-        df_save = self.df.with_columns(pl.col("attrs").map_elements(str, return_dtype=pl.String))
+        df_save = self.df.with_columns(pl.col("attrs").cast(pl.String))
         df_save.write_csv(path)
 
     @classmethod

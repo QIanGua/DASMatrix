@@ -75,6 +75,25 @@ stft_frame = frame.stft(nperseg=1024, noverlap=512)
 # Execute computation (Parallelized via Dask)
 result = processed.collect()
 
+# Optional: use HybridEngine for supported ops
+# Supported ops:
+# - slice
+# - detrend(time)
+# - demean(time)
+# - abs
+# - scale
+# - normalize
+# - bandpass
+# - lowpass
+# - highpass
+# - notch
+# - fft
+# - hilbert
+# - fk_filter
+# - median_filter
+# - stft
+result_hybrid = processed.collect(engine="hybrid")
+
 # Scientific Visualization (with Auto-Decimation Protection)
 processed.plot_heatmap(title="HPC Waterfall", max_samples=2000)
 ```
@@ -197,8 +216,20 @@ uv sync --dev
 # Run tests
 just test
 
-# Run tests
-just test
+# If tests hang at "collecting ..." due to Matplotlib font cache,
+# use a writable cache directory:
+MPLCONFIGDIR=/tmp/mplcache MPLBACKEND=Agg just test
+
+# If uv crashes on macOS due to SystemConfiguration proxy access,
+# ensure system proxy is configured (example uses local proxy):
+sudo networksetup -setwebproxy "Wi-Fi" 127.0.0.1 7890
+sudo networksetup -setsecurewebproxy "Wi-Fi" 127.0.0.1 7890
+sudo networksetup -setsocksfirewallproxy "Wi-Fi" 127.0.0.1 7890
+
+# Restore proxy settings:
+sudo networksetup -setwebproxystate "Wi-Fi" off
+sudo networksetup -setsecurewebproxystate "Wi-Fi" off
+sudo networksetup -setsocksfirewallproxystate "Wi-Fi" off
 
 # Run performance benchmarks
 just benchmark
