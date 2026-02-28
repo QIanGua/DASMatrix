@@ -98,6 +98,18 @@ result_hybrid = processed.collect(engine="hybrid")
 processed.plot_heatmap(title="HPC Waterfall", max_samples=2000)
 ```
 
+### API Migration Notes
+
+The project now standardizes on `snake_case` APIs. Legacy `CamelCase` methods remain available for one compatibility cycle and emit `DeprecationWarning`.
+
+| Legacy API | Preferred API |
+|------------|----------------|
+| `reader.ReadRawData(path)` | `reader.read_raw_data(path)` |
+| `processor.FKFilter(...)` | `processor.fk_filter(...)` |
+| `processor.ComputeSpectrum(...)` | `processor.compute_spectrum(...)` |
+| `processor.FindPeakFrequencies(...)` | `processor.find_peak_frequencies(...)` |
+| `DASMatrix.api.stream_func(...)` | `DASMatrix.stream(...)` |
+
 #### 2. Legacy API
 ```python
 from DASMatrix.acquisition import DASReader, DataType
@@ -113,7 +125,7 @@ config = SamplingConfig(
 
 # Read data
 reader = DASReader(config, DataType.DAT)
-raw_data = reader.ReadRawData("path/to/data.dat")
+raw_data = reader.read_raw_data("path/to/data.dat")
 ```
 
 #### 3. Visualization Example

@@ -5,6 +5,7 @@
 
 import asyncio
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Optional, Set
@@ -14,13 +15,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global main_loop, is_ready
     main_loop = asyncio.get_running_loop()
     is_ready = True
-    print("🚀 Web 服务器启动成功，Event Loop 已绑定。")
+    logger.info("Web server started and event loop bound.")
     yield
     is_ready = False
 
@@ -47,14 +50,14 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections.add(websocket)
         self._connected_event.set()  # 标记已有连接
-        print(f"📡 浏览器已连接 WebSocket. 当前活跃数: {len(self.active_connections)}")
+        logger.info("WebSocket connected. active=%d", len(self.active_connections))
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
             if len(self.active_connections) == 0:
                 self._connected_event.clear()
-            print(f"🔌 浏览器已断开 WebSocket. 剩余活跃数: {len(self.active_connections)}")
+            logger.info("WebSocket disconnected. active=%d", len(self.active_connections))
 
     async def wait_for_client(self, timeout: float = 30.0) -> bool:
         """等待至少一个客户端连接"""
@@ -76,7 +79,7 @@ class ConnectionManager:
             try:
                 await connection.send_text(data)
             except Exception as e:
-                print(f"⚠️ 发送失败: {e}")
+                logger.warning("Broadcast send failed: %s", e, exc_info=True)
                 disconnected.append(connection)
 
         for conn in disconnected:
@@ -100,7 +103,7 @@ config_state: Optional[DashboardConfig] = None
 
 @app.get("/api/config")
 async def get_config():
-    print(f"⚙️ 浏览器请求配置: {config_state}")
+    logger.debug("Dashboard config requested: %s", config_state)
     return config_state
 
 
@@ -117,13 +120,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     new_ch = int(cmd.get("value", 0))
                     if config_state:
                         config_state.focus_channel = new_ch
-                        print(f"🎯 浏览器指令: 切换焦点通道至 {new_ch}")
-            except Exception as e:
-                print(f"⚠️ 无法解析浏览器消息: {e}")
+                        logger.info("Focus channel changed by client: %d", new_ch)
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning("Failed to parse browser message: %s", e)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
-        print(f"❌ WebSocket 异常: {e}")
+        logger.error("WebSocket error: %s", e, exc_info=True)
         manager.disconnect(websocket)
 
 

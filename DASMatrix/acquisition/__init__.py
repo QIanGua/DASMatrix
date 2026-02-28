@@ -13,6 +13,7 @@
 旧的 DASReader API 保持向后兼容:
     >>> from DASMatrix.acquisition import DASReader, DataType
     >>> reader = DASReader(config, DataType.H5)
+    >>> data = reader.read_raw_data("data.h5")
 """
 
 # 新的便捷函数 (推荐使用)

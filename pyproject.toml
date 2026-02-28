@@ -8,10 +8,10 @@ version = "0.1.0"
 authors = [{ name = "QLong Wang", email = "wql1994513@gmail.com" }]
 description = "分布式声学传感数据处理与分析框架"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
@@ -36,22 +36,24 @@ dependencies = [
     "openpyxl>=3.1.5",
     "pint>=0.23",
     "pydantic>=2.12.5",
+    "torch>=2.0.0",
+    "onnxruntime>=1.15.0",
 ]
 
 [tool.setuptools]
-packages = [
-    "DASMatrix",
-    "DASMatrix.acquisition",
-    "DASMatrix.config",
-    "DASMatrix.processing",
-    "DASMatrix.visualization",
-]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["DASMatrix*"]
+
+[tool.setuptools.package-data]
+"DASMatrix.visualization" = ["web/static/*"]
 
 [tool.ruff]
 line-length = 120 # 示例配置
 
 [tool.ruff.lint]
-ignore = ["E501", "F841"]
+ignore = ["E501"]
 select = [
     "E",
     "F",

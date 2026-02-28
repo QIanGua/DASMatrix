@@ -174,4 +174,18 @@ jobs:
         uv build
         cd /tmp
         uv pip install --system $GITHUB_WORKSPACE/dist/*.whl
-        python -c "import DASMatrix; print('✅ Package imports successfully')"
+        python - <<'PY'
+        import importlib
+        from pathlib import Path
+        import DASMatrix
+        from DASMatrix import Stream, stream
+        import DASMatrix.visualization.web.server as web_server
+
+        assert callable(stream), "DASMatrix.stream must be callable"
+        assert isinstance(Stream, type), "DASMatrix.Stream must be a class"
+        for mod in ("DASMatrix.api", "DASMatrix.core", "DASMatrix.analysis", "DASMatrix.agent", "DASMatrix.utils"):
+            importlib.import_module(mod)
+        static_index = Path(web_server.__file__).with_name("static") / "index.html"
+        assert static_index.is_file(), "Web static index.html must be packaged"
+        print("✅ Package imports and public API surface validated")
+        PY

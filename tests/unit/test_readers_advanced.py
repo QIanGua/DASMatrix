@@ -20,7 +20,7 @@ class TestAdvancedReaders:
         mock_read.return_value = np.zeros((100, 10))
 
         reader = DASReader(mock_sampling_config, DataType.SEGY)
-        data = reader.ReadRawData(dummy_file)
+        data = reader.read_raw_data(dummy_file)
 
         assert data.shape == (100, 10)
         mock_read.assert_called_with(dummy_file, format_name="SEGY", lazy=True)
@@ -33,7 +33,7 @@ class TestAdvancedReaders:
         mock_read.return_value = np.zeros((100, 10))
 
         reader = DASReader(mock_sampling_config, DataType.MINISEED)
-        data = reader.ReadRawData(dummy_file)
+        data = reader.read_raw_data(dummy_file)
 
         assert data.shape == (100, 10)
         mock_read.assert_called_with(dummy_file, format_name="MINISEED", lazy=True)

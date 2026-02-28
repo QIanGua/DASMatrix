@@ -8,11 +8,12 @@
 
 旧的 DASReader API 保持向后兼容:
     >>> reader = DASReader(config, DataType.H5)
-    >>> data = reader.ReadRawData(file_path)
+    >>> data = reader.read_raw_data(file_path)
 """
 
 import logging
 import os
+import warnings
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
@@ -52,23 +53,41 @@ class DataReader(ABC):
         self.fs = sampling_config.fs
         self.logger = logging.getLogger(__name__)
 
-    @abstractmethod
-    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
-        """读取原始数据"""
-        pass
+    @staticmethod
+    def _warn_deprecated(old: str, new: str) -> None:
+        warnings.warn(
+            f"`{old}` is deprecated and will be removed in a future release. Use `{new}` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
-    def ValidateFile(self, file_path: Path) -> None:
-        """验证文件是否存在"""
+    @abstractmethod
+    def read_raw_data(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
+        """读取原始数据。"""
+        raise NotImplementedError
+
+    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
+        """Deprecated alias of :meth:`read_raw_data`."""
+        self._warn_deprecated("ReadRawData", "read_raw_data")
+        return self.read_raw_data(file_path, target_col=target_col)
+
+    def validate_file(self, file_path: Path) -> None:
+        """验证文件是否存在。"""
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
+
+    def ValidateFile(self, file_path: Path) -> None:
+        """Deprecated alias of :meth:`validate_file`."""
+        self._warn_deprecated("ValidateFile", "validate_file")
+        self.validate_file(file_path)
 
 
 class DATReader(DataReader):
     """DAT 格式数据读取器 (向后兼容)"""
 
-    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
+    def read_raw_data(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取 DAT 格式的原始数据 (使用内存映射以支持大文件)"""
-        self.ValidateFile(file_path)
+        self.validate_file(file_path)
 
         try:
             # DAT 原始数据一般为 16-bit 整数
@@ -97,9 +116,9 @@ class DATReader(DataReader):
 class H5Reader(DataReader):
     """HDF5 格式数据读取器 (向后兼容)"""
 
-    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
+    def read_raw_data(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取 HDF5 格式的原始数据"""
-        self.ValidateFile(file_path)
+        self.validate_file(file_path)
 
         try:
             with h5py.File(file_path, "r") as f:
@@ -159,9 +178,9 @@ class H5Reader(DataReader):
 class SEGYReader(DataReader):
     """SEGY 格式数据读取器 (向后兼容)"""
 
-    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
+    def read_raw_data(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取 SEGY 格式的原始数据"""
-        self.ValidateFile(file_path)
+        self.validate_file(file_path)
 
         try:
             # 使用 obspy 读取 SEGY
@@ -178,9 +197,9 @@ class SEGYReader(DataReader):
 class MiniSEEDReader(DataReader):
     """MiniSEED 格式数据读取器 (向后兼容)"""
 
-    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
+    def read_raw_data(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取 MiniSEED 格式的原始数据"""
-        self.ValidateFile(file_path)
+        self.validate_file(file_path)
 
         try:
             st = obspy.read(str(file_path), format="MSEED")
@@ -203,7 +222,7 @@ class DASReader:
 
     旧的 DASReader API 保持可用:
         >>> reader = DASReader(config, DataType.H5)
-        >>> data = reader.ReadRawData(file_path)
+        >>> data = reader.read_raw_data(file_path)
     """
 
     def __init__(self, sampling_config: SamplingConfig, data_type: DataType = DataType.DAT):
@@ -231,7 +250,15 @@ class DASReader:
 
         self.reader: DataReader = reader_class(sampling_config)
 
-    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
+    @staticmethod
+    def _warn_deprecated(old: str, new: str) -> None:
+        warnings.warn(
+            f"`{old}` is deprecated and will be removed in a future release. Use `{new}` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+    def read_raw_data(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
         """读取指定路径的数据文件
 
         Args:
@@ -274,6 +301,11 @@ class DASReader:
         except Exception as e:
             self.logger.error(f"读取数据时发生错误: {e}, 文件路径: {file_path}")
             raise
+
+    def ReadRawData(self, file_path: Path, target_col: Optional[List[int]] = None) -> Union[np.ndarray, "da.Array"]:
+        """Deprecated alias of :meth:`read_raw_data`."""
+        self._warn_deprecated("ReadRawData", "read_raw_data")
+        return self.read_raw_data(file_path, target_col=target_col)
 
 
 # ============================================================================

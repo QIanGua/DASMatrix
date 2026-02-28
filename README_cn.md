@@ -91,7 +91,7 @@ config = SamplingConfig(
 
 # 读取数据
 reader = DASReader(config, DataType.DAT)
-raw_data = reader.ReadRawData("path/to/data.dat")
+raw_data = reader.read_raw_data("path/to/data.dat")
 ```
 
 #### 3. 可视化示例
@@ -142,6 +142,18 @@ visualizer.WaterfallPlot(
 
 plt.show()
 ```
+
+### API 迁移说明
+
+项目已统一推荐 `snake_case` 风格接口。旧版 `CamelCase` 方法保留一个兼容周期，并会发出 `DeprecationWarning`。
+
+| 旧接口 | 推荐接口 |
+|--------|----------|
+| `reader.ReadRawData(path)` | `reader.read_raw_data(path)` |
+| `processor.FKFilter(...)` | `processor.fk_filter(...)` |
+| `processor.ComputeSpectrum(...)` | `processor.compute_spectrum(...)` |
+| `processor.FindPeakFrequencies(...)` | `processor.find_peak_frequencies(...)` |
+| `DASMatrix.api.stream_func(...)` | `DASMatrix.stream(...)` |
 
 ## 📚 文档
 

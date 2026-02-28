@@ -54,7 +54,7 @@ def test_dat_reader_lazy(dummy_dat_file, sampling_config):
     file_path, expected_data = dummy_dat_file
 
     reader = DASReader(sampling_config, DataType.DAT)
-    dask_data = reader.ReadRawData(file_path)
+    dask_data = reader.read_raw_data(file_path)
 
     # Verify it is a dask array
     assert isinstance(dask_data, da.Array)
@@ -77,7 +77,7 @@ def test_h5_reader_lazy(dummy_h5_file, sampling_config):
     file_path, expected_data = dummy_h5_file
 
     reader = DASReader(sampling_config, DataType.H5)
-    dask_data = reader.ReadRawData(file_path)
+    dask_data = reader.read_raw_data(file_path)
 
     assert isinstance(dask_data, da.Array)
 

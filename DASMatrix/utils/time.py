@@ -205,10 +205,8 @@ def _parse_timedelta_string(s: str) -> np.timedelta64:
     # 尝试直接解析为 numpy 格式
     try:
         return np.timedelta64(s)
-    except ValueError:
-        pass
-
-    raise ValueError(f"Cannot parse '{s}' as timedelta. Expected format like '10s', '1.5h', '500ms'.")
+    except ValueError as e:
+        raise ValueError(f"Cannot parse '{s}' as timedelta. Expected format like '10s', '1.5h', '500ms'.") from e
 
 
 def _create_timedelta(value: float, unit: str) -> np.timedelta64:

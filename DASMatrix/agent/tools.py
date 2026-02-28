@@ -9,6 +9,8 @@ from uuid import uuid4
 
 import numpy as np
 
+from ..ml.model import ONNXModel, TorchModel
+from ..ml.pipeline import InferencePipeline
 from .session import AgentSession
 
 
@@ -218,10 +220,10 @@ class DASAgentTools:
         config = SamplingConfig(fs=int(data.fs))
         processor = DASProcessor(config)
 
-        spectrum = processor.ComputeSpectrum(arr, channel, window_size=window_size, overlap=overlap)
+        spectrum = processor.compute_spectrum(arr, channel, window_size=window_size, overlap=overlap)
 
         # 找峰值
-        peaks = processor.FindPeakFrequencies(spectrum, n_peaks=5)
+        peaks = processor.find_peak_frequencies(spectrum, n_peaks=5)
 
         return {
             "channel": channel,
@@ -285,6 +287,58 @@ class DASAgentTools:
             "events_detected": len(events),
             "events": events[:20],  # 限制返回数量
         }
+
+    # ========== AI 推理工具 ==========
+
+    def run_inference(
+        self,
+        data_id: str,
+        model_path: str,
+        backend: Literal["torch", "onnx"] = "torch",
+        device: str = "cpu",
+        preprocess_config: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """应用 AI 模型对 DAS 数据进行推理。
+
+        Args:
+            data_id: 数据 ID
+            model_path: 模型文件路径 (.pth 或 .onnx)
+            backend: 推理后端 ('torch' 或 'onnx')
+            device: 运行设备 ('cpu' 或 'cuda')
+            preprocess_config: 可选的预处理配置 (如标准化方法)
+
+        Returns:
+            推理结果摘要
+        """
+        data = self.session.get(data_id)
+
+        # 初始化模型
+        if backend == "torch":
+            model = TorchModel(model_path, device=device)
+        else:
+            model = ONNXModel(model_path, device=device)
+
+        # 构建流水线 (简单包装)
+        pipeline = InferencePipeline(model)
+
+        # 执行推理
+        result = data.predict(pipeline)
+
+        # 结果可能很大，Agent 通常只需要摘要或概率
+        summary = {
+            "model_path": model_path,
+            "backend": backend,
+            "output_shape": list(result.shape) if hasattr(result, "shape") else str(type(result)),
+        }
+
+        # 如果是分类模型，返回最大概率类别 (模拟逻辑)
+        if result.ndim >= 1:
+            summary["max_val"] = float(np.max(result))
+            summary["min_val"] = float(np.min(result))
+            if result.ndim == 2:  # [Batch, Classes]
+                summary["predicted_class"] = int(np.argmax(result, axis=1)[0])
+
+        return summary
 
     # ========== 统计分析工具 ==========
 

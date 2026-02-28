@@ -48,14 +48,14 @@ def process_and_visualize():
         # B. Event Detection
         # Simple threshold on the envelope
         events = processed.threshold_detect(sigma=4.0)
-        n_events = np.sum(events)
+        _ = np.sum(events)
 
         # C. Update Visualization
         # We need to get the data out.
         env_data = processed.data.values  # (time, channels)
 
         # Taking the max channel for the line plot
-        line_trace = np.max(env_data, axis=1)
+        _ = np.max(env_data, axis=1)
 
         # For the heatmap, we might want to push to a rolling buffer for visualization.
         # But RealtimeVisualizer.update expects a full frame for the window?

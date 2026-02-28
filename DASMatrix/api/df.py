@@ -157,7 +157,7 @@ def _read_dat(
     """从DAT文件读取DAS数据。"""
     config = SamplingConfig(fs=fs, channels=channels, byte_order=byte_order)
     reader = DASReader(config, data_type=DataType.DAT)
-    raw_data = reader.ReadRawData(Path(path))
+    raw_data = reader.read_raw_data(Path(path))
 
     return _create_dasframe(raw_data, fs=fs, source_file=str(path), **kwargs)
 

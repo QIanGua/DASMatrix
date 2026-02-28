@@ -66,7 +66,7 @@ class TestFKProcessing:
         data, _, _, _, dx = sample_data
         # 信号速度 1000 m/s
         # 滤波保留 > 500 m/s
-        filtered_data = das_processor.FKFilter(data, v_min=500, v_max=None, dx=dx)
+        filtered_data = das_processor.fk_filter(data, v_min=500, v_max=None, dx=dx)
 
         # 应该保留大部分能量
         energy_in = np.sum(data**2)
@@ -84,7 +84,7 @@ class TestFKProcessing:
         # 如果 v_min=500, v_max=None，则保留 |v|>500。信号 1000 在保留区。
         # 如果要去除 1000，我们需要保留 |v| < 500 => v_max=500
 
-        filtered_data = das_processor.FKFilter(data, v_min=None, v_max=500, dx=dx)
+        filtered_data = das_processor.fk_filter(data, v_min=None, v_max=500, dx=dx)
 
         energy_in = np.sum(data**2)
         energy_out = np.sum(filtered_data**2)

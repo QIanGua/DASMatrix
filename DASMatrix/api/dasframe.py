@@ -1,9 +1,9 @@
 import builtins
+import logging
 import warnings
 from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union, cast
 
 import dask.array as da
-import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 from matplotlib.axes import Axes
@@ -12,9 +12,14 @@ from scipy import signal
 from scipy.ndimage import median_filter as scipy_median_filter
 
 from ..core.inventory import DASInventory
+from . import dasframe_plot, dasframe_units
 
 if TYPE_CHECKING:
     from ..core.event import EventCatalog
+    from ..ml.model import DASModel
+    from ..ml.pipeline import InferencePipeline
+
+logger = logging.getLogger(__name__)
 
 
 class DASFrame:
@@ -535,7 +540,7 @@ class DASFrame:
         def _fk_func(block, fs, v_min, v_max, dx):
             config = SamplingConfig(fs=fs, channels=block.shape[1])
             processor = DASProcessor(config)
-            return processor.FKFilter(block, v_min=v_min, v_max=v_max, dx=dx)
+            return processor.fk_filter(block, v_min=v_min, v_max=v_max, dx=dx)
 
         filtered = xr.apply_ufunc(
             _fk_func,
@@ -561,6 +566,21 @@ class DASFrame:
 
         detected = np.abs(self._data) > threshold
         return DASFrame(detected, self._fs, self._dx, **self._metadata)
+
+    def predict(self, model: Union["DASModel", "InferencePipeline"]) -> Any:
+        """应用 AI 模型进行预测。
+
+        Args:
+            model: DASModel 或 InferencePipeline 实例。
+
+        Returns:
+            Any: 推理结果。
+        """
+        from ..ml.pipeline import InferencePipeline
+
+        if isinstance(model, InferencePipeline):
+            return model.run(self)
+        return model.predict(self.collect())
 
     def sta_lta(self, n_sta: int, n_lta: int) -> "DASFrame":
         """STA/LTA 能量比检测。"""
@@ -627,8 +647,8 @@ class DASFrame:
             if isinstance(st, str):
                 try:
                     base_time = datetime.fromisoformat(st.replace("Z", "+00:00"))
-                except Exception:
-                    pass
+                except (TypeError, ValueError) as e:
+                    logger.debug("Failed to parse acquisition start_time: %s", e)
             elif isinstance(st, datetime):
                 base_time = st
 
@@ -688,36 +708,7 @@ class DASFrame:
         **kwargs,
     ) -> Figure:
         """绘制时间序列。"""
-        if ch is None:
-            frame = self.slice(x=slice(0, min(5, self.shape[1])))
-        else:
-            frame = self.slice(x=slice(ch, ch + 1))
-
-        nt = frame.shape[0]
-        if nt > max_samples:
-            step = int(np.ceil(nt / max_samples))
-            frame = frame.slice(t=slice(0, nt, step))
-
-        data = frame.collect()
-
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(10, 4))
-        else:
-            if ax.figure is None:
-                raise ValueError("Provided ax must belong to a figure")
-            fig = cast(Figure, ax.figure)
-
-        t = frame._data.time.values
-        if ch is None:
-            ax.plot(t, data, alpha=0.7, **kwargs)
-        else:
-            ax.plot(t, data[:, 0], **kwargs)
-
-        ax.set_xlabel("Time (s)")
-        ax.set_ylabel("Amplitude")
-        ax.set_title(title)
-        ax.grid(True, alpha=0.3)
-        return fig
+        return dasframe_plot.plot_ts(self, ch=ch, title=title, ax=ax, max_samples=max_samples, **kwargs)
 
     def plot_spectrum(
         self,
@@ -728,28 +719,7 @@ class DASFrame:
         **kwargs: Any,
     ) -> Figure:
         """绘制频谱图 (FFT)。"""
-        ch_data = self._data.isel(distance=ch)
-        n = int(ch_data.shape[0])
-        step = 1
-        if max_samples and n > max_samples:
-            step = int(np.ceil(n / max_samples))
-            ch_data = ch_data.isel(time=slice(0, n, step))
-
-        ch_data = ch_data.compute().values
-        fs_eff = self._fs / step
-
-        from ..visualization.das_visualizer import SpectrumPlot
-
-        plotter = SpectrumPlot()
-        from scipy import signal
-
-        n = len(ch_data)
-        nperseg = min(2048, max(8, n // 4))
-        freqs, psd = signal.welch(ch_data, fs=fs_eff, nperseg=nperseg, scaling="spectrum")
-        mags = np.sqrt(psd)
-
-        fig = plotter.plot(freqs, mags, title=title, ax=ax, **kwargs)
-        return fig
+        return dasframe_plot.plot_spectrum(self, ch=ch, title=title, ax=ax, max_samples=max_samples, **kwargs)
 
     def plot_spectrogram(
         self,
@@ -762,29 +732,16 @@ class DASFrame:
         **kwargs: Any,
     ) -> Figure:
         """绘制时频图 (STFT)。"""
-        ch_data = self._data.isel(distance=ch)
-        n = int(ch_data.shape[0])
-        step = 1
-        if max_samples and n > max_samples:
-            step = int(np.ceil(n / max_samples))
-            ch_data = ch_data.isel(time=slice(0, n, step))
-
-        ch_data = ch_data.compute().values
-        fs_eff = self._fs / step
-
-        from ..visualization.das_visualizer import SpectrogramPlot
-
-        plotter = SpectrogramPlot()
-        fig = plotter.plot(
-            ch_data,
-            fs_eff,
+        return dasframe_plot.plot_spectrogram(
+            self,
+            ch=ch,
+            title=title,
             window_size=window_size,
             overlap=overlap,
-            title=title,
             ax=ax,
+            max_samples=max_samples,
             **kwargs,
         )
-        return fig
 
     def plot_heatmap(
         self,
@@ -798,105 +755,17 @@ class DASFrame:
         **kwargs: Any,
     ) -> Figure:
         """绘制热图（瀑布图）。"""
-        if t_range is not None or channels is not None:
-            warnings.warn("Using t_range or channels in plot_heatmap is deprecated. Please use .slice() instead.")
-            frame = self.slice(t=t_range or slice(None), x=channels or slice(None))
-        else:
-            frame = self
-
-        nt, nx = frame.shape
-        if nt > max_samples:
-            step = int(np.ceil(nt / max_samples))
-            frame = frame.slice(t=slice(0, nt, step))
-
-        data = frame.collect()
-
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(10, 6))
-        else:
-            if ax.figure is None:
-                raise ValueError("Provided ax must belong to a figure")
-            fig = cast(Figure, ax.figure)
-
-        dist_coords = frame._data.distance.values / self._dx
-        time_coords = frame._data.time.values
-
-        extent = (
-            dist_coords[0] - 0.5,
-            dist_coords[-1] + 0.5,
-            time_coords[-1] + 0.5 / self._fs,
-            time_coords[0] - 0.5 / self._fs,
-        )
-        vmax = np.percentile(np.abs(data), 98)
-        vmax_val = float(vmax)
-        im = ax.imshow(
-            data,
-            aspect="auto",
+        return dasframe_plot.plot_heatmap(
+            self,
+            channels=channels,
+            t_range=t_range,
+            title=title,
             cmap=cmap,
-            extent=extent,
-            vmin=-vmax_val,
-            vmax=vmax_val,
+            ax=ax,
+            max_samples=max_samples,
+            events=events,
             **kwargs,
         )
-
-        ax.set_xlabel("Channel")
-        ax.set_ylabel("Time (s)")
-        ax.set_title(title)
-        if ax is not None:
-            plt.colorbar(im, ax=ax, label="Amplitude")
-
-        # 绘制事件叠加层
-        if events is not None and ax is not None:
-            from datetime import datetime
-
-            import matplotlib.patches as patches
-
-            # 需要将 datetime 转换为绘图坐标 (时间轴相对秒数)
-            # 获取当前 frame 的基准时间
-            base_time = None
-            inv = self.inventory
-            if inv and inv.acquisition and inv.acquisition.start_time:
-                st = inv.acquisition.start_time
-                if isinstance(st, str):
-                    try:
-                        base_time = datetime.fromisoformat(st.replace("Z", "+00:00"))
-                    except Exception:
-                        pass
-                elif isinstance(st, datetime):
-                    base_time = st
-
-            if base_time:
-                for row in events.df.iter_rows(named=True):
-                    # 计算相对时间
-                    t_start = (row["start_time"] - base_time).total_seconds()
-                    t_end = (row["end_time"] - base_time).total_seconds() if row["end_time"] else t_start + 1.0
-
-                    # 检查是否在当前显示范围内
-                    # time_coords 是相对时间数组
-                    if t_end < time_coords[0] or t_start > time_coords[-1]:
-                        continue
-
-                    # 绘制矩形框
-                    # x轴是 channel (distance), y轴是 time (seconds)
-                    # extent = (dist_min, dist_max, time_max, time_min)
-                    # 注意 imshow 的 extent y 轴通常是反向的或者从上到下的
-
-                    # 转换为 channel index 或 distance
-                    # 这里的 plot_heatmap 使用的是 dist_coords (物理距离) 或 channel index
-                    # extent[0] = dist_start, extent[1] = dist_end
-
-                    x_start = row["min_channel"] * self._dx
-                    x_width = (row["max_channel"] - row["min_channel"]) * self._dx
-                    y_start = t_start
-                    height = t_end - t_start
-
-                    rect = patches.Rectangle(
-                        (x_start, y_start), x_width, height, linewidth=1, edgecolor="r", facecolor="none", alpha=0.8
-                    )
-                    ax.add_patch(rect)
-                    ax.text(x_start, y_start, row["event_type"], color="red", fontsize=8)
-
-        return fig
 
     def plot_fk(
         self,
@@ -909,36 +778,16 @@ class DASFrame:
         **kwargs: Any,
     ) -> Figure:
         """绘制 FK 谱图。"""
-        frame = self
-        nt, nx = frame.shape
-        t_step = 1
-        x_step = 1
-        if max_samples and nt > max_samples:
-            t_step = int(np.ceil(nt / max_samples))
-            frame = frame.slice(t=slice(0, nt, t_step))
-        if max_channels and nx > max_channels:
-            x_step = int(np.ceil(nx / max_channels))
-            frame = frame.slice(x=slice(0, nx, x_step))
-
-        data = frame.collect()
-
-        from ..config.sampling_config import SamplingConfig
-        from ..processing.das_processor import DASProcessor
-
-        fs_eff = self._fs / t_step
-        dx_eff = dx * x_step
-
-        config = SamplingConfig(fs=fs_eff, channels=data.shape[1])
-        processor = DASProcessor(config)
-
-        fk, freqs, k = processor.f_k_transform(data)
-        k = k / dx_eff
-
-        from ..visualization.das_visualizer import FKPlot
-
-        plotter = FKPlot()
-        fig = plotter.plot(fk, freqs, k, title=title, v_lines=v_lines, **kwargs)
-        return fig
+        return dasframe_plot.plot_fk(
+            self,
+            dx=dx,
+            title=title,
+            v_lines=v_lines,
+            ax=ax,
+            max_samples=max_samples,
+            max_channels=max_channels,
+            **kwargs,
+        )
 
     def plot_profile(
         self,
@@ -951,49 +800,13 @@ class DASFrame:
         **kwargs: Any,
     ) -> Figure:
         """绘制空间剖面图。"""
-        frame = self if channels is None else self.slice(x=channels)
-
-        if stat == "rms":
-            values = cast(np.ndarray, frame.rms())
-            default_title = "RMS Profile"
-            default_ylabel = "RMS Amplitude"
-        elif stat == "mean":
-            values = cast(np.ndarray, frame.mean(axis=0).flatten())
-            default_title = "Mean Profile"
-            default_ylabel = "Mean Amplitude"
-        elif stat == "std":
-            values = cast(np.ndarray, frame.std(axis=0).flatten())
-            default_title = "Standard Deviation Profile"
-            default_ylabel = "Std Amplitude"
-        elif stat == "max":
-            values = cast(np.ndarray, frame.max(axis=0).flatten())
-            default_title = "Max Profile"
-            default_ylabel = "Max Amplitude"
-        elif stat == "min":
-            values = cast(np.ndarray, frame.min(axis=0).flatten())
-            default_title = "Min Profile"
-            default_ylabel = "Min Amplitude"
-        else:
-            raise ValueError(f"Unsupported stat: {stat}")
-
-        from ..visualization.das_visualizer import ProfilePlot
-
-        plotter = ProfilePlot()
-
-        if x_axis == "channel":
-            distances = frame._data.distance.values / self._dx
-            if "xlabel" not in kwargs:
-                kwargs["xlabel"] = "Channel"
-        else:
-            distances = frame._data.distance.values
-            if "xlabel" not in kwargs:
-                kwargs["xlabel"] = "Distance (m)"
-
-        return plotter.plot(
-            values=values,
-            distances=distances,
-            title=title or default_title,
-            ylabel=ylabel or default_ylabel,
+        return dasframe_plot.plot_profile(
+            self,
+            stat=stat,
+            channels=channels,
+            x_axis=x_axis,
+            title=title,
+            ylabel=ylabel,
             ax=ax,
             **kwargs,
         )
@@ -1005,7 +818,7 @@ class DASFrame:
         **kwargs: Any,
     ) -> Figure:
         """绘制 RMS 剖面图。"""
-        return self.plot_profile(stat="rms", channels=channels, x_axis=x_axis, **kwargs)
+        return dasframe_plot.plot_rms(self, channels=channels, x_axis=x_axis, **kwargs)
 
     def plot_mean(
         self,
@@ -1014,7 +827,7 @@ class DASFrame:
         **kwargs: Any,
     ) -> Figure:
         """绘制均值剖面图。"""
-        return self.plot_profile(stat="mean", channels=channels, x_axis=x_axis, **kwargs)
+        return dasframe_plot.plot_mean(self, channels=channels, x_axis=x_axis, **kwargs)
 
     def plot_std(
         self,
@@ -1023,7 +836,7 @@ class DASFrame:
         **kwargs: Any,
     ) -> Figure:
         """绘制标准差剖面图。"""
-        return self.plot_profile(stat="std", channels=channels, x_axis=x_axis, **kwargs)
+        return dasframe_plot.plot_std(self, channels=channels, x_axis=x_axis, **kwargs)
 
     def to_obspy(self) -> Any:
         """Convert to ObsPy Stream."""
@@ -1090,76 +903,20 @@ class DASFrame:
     # --- Units and Physical Quantities ---
 
     def to_standard_units(self) -> "DASFrame":
-        """将数据转换为标准化的物理单位 (SI)。
-
-        支持的转换逻辑：
-        1. Phase (rad) -> Strain (m/m)
-        2. Phase Rate (rad/s) -> Strain Rate (m/m/s)
-        """
-        inv = self.inventory
-        if not inv or not inv.acquisition:
-            warnings.warn("缺少 Inventory/Acquisition 信息，无法自动转换单位")
-            return self
-
-        current_unit = self.get_unit()
-        if current_unit == "unknown":
-            return self
-
-        # 核心转换逻辑：Phase to Strain
-        # Formula: strain = (lambda * phase) / (4 * pi * n * L * G)
-        if current_unit in ["rad", "radians", "rad/s"]:
-            # 获取必要参数
-            wavelength = 1550.0  # Default nm
-            if inv.interrogator and inv.interrogator.wavelength:
-                wavelength = inv.interrogator.wavelength
-
-            gl = 10.0  # Default m
-            if inv.fiber and inv.fiber.gauge_length:
-                gl = inv.fiber.gauge_length
-
-            # 常数
-            n_refractive = 1.46
-            G_factor = 0.78
-
-            # 计算比例系数 (rad -> strain)
-            # lambda is in nm, convert to m: * 1e-9
-            scale = (wavelength * 1e-9) / (4 * np.pi * n_refractive * gl * G_factor)
-
-            target_unit = "strain" if current_unit != "rad/s" else "strain_rate"
-
-            # 应用转换
-            return self.scale(scale)._update_unit_metadata(target_unit)
-
-        return self
+        """将数据转换为标准化的物理单位 (SI)。"""
+        return dasframe_units.to_standard_units(self)
 
     def _update_unit_metadata(self, unit_name: str) -> "DASFrame":
         """Internal helper to update unit metadata."""
-        new_meta = self._metadata.copy()
-        if "inventory" in new_meta:
-            new_meta["inventory"].acquisition.data_unit = unit_name
-        new_meta["units"] = unit_name
-        self._metadata = new_meta
-        return self
+        return dasframe_units.update_unit_metadata(self, unit_name)
 
     def get_unit(self) -> Any:
         """Get the current data unit from metadata."""
-        inv = self.inventory
-        if inv and inv.acquisition:
-            return inv.acquisition.data_unit
-        return self._metadata.get("units", "unknown")
+        return dasframe_units.get_unit(self)
 
     def convert_units(self, target_unit: str) -> "DASFrame":
         """Explicitly convert data to a target unit using Pint."""
-        from ..units import ureg
-
-        current_unit = self.get_unit()
-        if current_unit == "unknown":
-            raise ValueError("Current units are unknown, cannot convert.")
-
-        q = ureg.Quantity(self.collect(), current_unit)
-        converted = q.to(target_unit).magnitude
-
-        return DASFrame(converted, fs=self._fs, dx=self._dx)._update_unit_metadata(target_unit)
+        return dasframe_units.convert_units(self, target_unit)
 
     # --- Analysis and Detection ---
 

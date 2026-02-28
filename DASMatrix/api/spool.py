@@ -1,3 +1,4 @@
+import logging
 import pickle
 import warnings
 from datetime import datetime
@@ -8,6 +9,8 @@ import pandas as pd
 
 from ..acquisition.formats import FormatMetadata, FormatRegistry
 from .dasframe import DASFrame
+
+logger = logging.getLogger(__name__)
 
 
 class DASSpool:
@@ -53,12 +56,8 @@ class DASSpool:
                 # Glob pattern
                 parent = path.parent
                 # if parent is just the pattern (e.g. "*.h5"), parent is "."
-                if not parent.exists() and not str(parent) == ".":
-                    # The parent part itself might be part of glob,
-                    # e.g. "data_*/file.h5"
-                    # For simplicity, assume simple globs or recursive search
-                    # from a base dir. If users pass "data/*.h5", parent is "data".
-                    pass
+                if not parent.exists() and str(parent) != ".":
+                    logger.debug("Glob parent does not exist yet: %s", parent)
 
                 # Use glob on the parent if it exists, otherwise assume current dir
                 search_dir = parent if parent.name else Path(".")
@@ -180,8 +179,8 @@ class DASSpool:
                         start_time = pd.to_datetime(meta.start_time)
                         if start_time.tzinfo is not None:
                             start_time = start_time.tz_localize(None)
-                    except Exception:
-                        pass
+                    except (TypeError, ValueError) as e:
+                        logger.debug("Failed to parse start_time for %s: %s", p, e)
 
                 end_time = None
                 if start_time is not None and meta.sampling_rate and meta.n_samples:
@@ -199,7 +198,8 @@ class DASSpool:
                         "channel_spacing": meta.channel_spacing,
                     }
                 )
-            except Exception:
+            except Exception as e:
+                warnings.warn(f"扫描文件失败，已跳过: {p}. 错误: {e}")
                 continue
 
         if data_list:

@@ -255,7 +255,7 @@ class NumbaBackend:
             elif op.operation == "bandpass":
                 # Placeholder: Pass-through
                 # TODO: Implement IIR/FIR filter state or sosfilt
-                pass
+                ops_code.append("val = val")
 
             elif op.operation == "normalize":
                 # Assume z-score normalization (uses mean and std from aux)

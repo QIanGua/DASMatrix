@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import logging
 import time
 import webbrowser
 from typing import Dict, Optional
@@ -14,6 +15,7 @@ from .server import DashboardConfig, run_in_background
 
 # 声明全局变量以满足 type checker 要求
 config_state = None
+logger = logging.getLogger(__name__)
 
 
 class DASWebDashboard:
@@ -53,7 +55,7 @@ class DASWebDashboard:
         # 启动后台服务器
         self._server_thread = run_in_background(host, port)
         self.url = f"http://{host}:{port}"
-        print(f"🌐 实时 Web 看板已启动: {self.url}")
+        logger.info("Web dashboard started: %s", self.url)
 
         # 等待服务器就绪 (优化启动速度)
         max_wait = 2.0
@@ -62,7 +64,7 @@ class DASWebDashboard:
             time.sleep(0.05)
 
         if server.is_ready:
-            print("✅ Web 服务已就绪")
+            logger.info("Web dashboard backend is ready.")
 
     def show(self, open_browser: bool = True):
         """打开看板 (默认尝试自动打开浏览器)"""
@@ -76,11 +78,13 @@ class DASWebDashboard:
         if not server.is_ready or server.main_loop is None:
             return False
 
-        print("⏳ 等待浏览器连接...")
+        logger.info("Waiting for web client connection...")
         future = asyncio.run_coroutine_threadsafe(server.manager.wait_for_client(timeout), server.main_loop)
         try:
             return future.result(timeout + 5)
-        except Exception:
+        except TimeoutError:
+            return False
+        except RuntimeError:
             return False
 
     def update(
@@ -142,8 +146,8 @@ class DASWebDashboard:
             asyncio.run_coroutine_threadsafe(server.manager.broadcast(message), server.main_loop)
         else:
             if int(time.time()) % 5 == 0:
-                print("⚠️ 探测到 Web 服务器尚未完全启动，正在重试...", end="\r")
+                logger.warning("Web server is not fully ready yet; retrying broadcast.")
 
     def close(self):
         """关闭服务 (通常后台进程会自动随主程序退出)"""
-        pass
+        logger.info("close() called; web dashboard server runs as daemon and exits with host process.")

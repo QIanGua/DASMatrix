@@ -1,6 +1,6 @@
 """Polars 后端实现，负责元数据查询与过滤。"""
 
-from typing import List
+from typing import cast
 
 import polars as pl
 
@@ -9,7 +9,7 @@ class PolarsBackend:
     """Polars 元数据后端。"""
 
     def __init__(self, meta_df: pl.DataFrame):
-        self.meta = meta_df.lazy()
+        self.meta: pl.LazyFrame = meta_df.lazy()
 
     def filter(self, expr: str) -> "PolarsBackend":
         """执行 SQL-like 过滤字符串"""
@@ -18,8 +18,8 @@ class PolarsBackend:
         # 实际 DSL 实现需要 dsl.py 解析器的支持
         raise NotImplementedError("String expression filtering not implemented yet")
 
-    def select_channels(self, condition: pl.Expr) -> List[int]:
+    def select_channels(self, condition: pl.Expr) -> list[int]:
         """根据条件筛选通道索引"""
         # 触发计算，获取符合条件的 channel index
-        res = self.meta.filter(condition).select("channel_index").collect()
-        return res["channel_index"].to_list()
+        res = cast(pl.DataFrame, self.meta.filter(condition).select("channel_index").collect())
+        return res.get_column("channel_index").to_list()

@@ -1,5 +1,6 @@
+from . import ml
 from .acquisition.das_reader import DASReader
-from .api import DASFrame, DASSpool, from_array, read, spool, stream
+from .api import DASFrame, DASSpool, Stream, from_array, read, spool, stream, stream_func
 from .config.sampling_config import SamplingConfig
 from .examples import get_example_frame, get_example_spool, list_example_types
 from .processing.das_processor import DASProcessor
@@ -17,10 +18,12 @@ __all__ = [
     "SamplingConfig",
     "DASFrame",
     "DASSpool",
+    "Stream",
     # API 函数
     "read",
     "from_array",
     "stream",
+    "stream_func",
     "spool",
     # 示例数据
     "get_example_frame",
@@ -39,4 +42,5 @@ __all__ = [
     "ms",
     "Hz",
     "kHz",
+    "ml",
 ]

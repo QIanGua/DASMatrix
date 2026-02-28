@@ -6,6 +6,7 @@ Provides a high-level interface for handling real-time DAS data streams.
 Integrates with RingBuffer for efficient data buffering.
 """
 
+import logging
 import threading
 import time
 from typing import Callable, Optional, Union
@@ -15,6 +16,8 @@ import numpy as np
 from ..core.ring_buffer import RingBuffer
 from .dasframe import DASFrame
 from .df import _create_dasframe  # Helper to create frames efficiently
+
+logger = logging.getLogger(__name__)
 
 
 class Stream:
@@ -125,7 +128,7 @@ class Stream:
                 try:
                     self._callback(frame)
                 except Exception as e:
-                    print(f"Error in stream callback: {e}")
+                    logger.warning("Error in stream callback: %s", e, exc_info=True)
 
             # Sleep to simulate real-time rate
             elapsed = time.time() - loop_start
