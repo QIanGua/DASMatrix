@@ -15,6 +15,8 @@ DASMatrix 是一个专为分布式声学传感（DAS）数据处理和分析设�
 - 🚀 **高效数据读取**：支持 12+ 种数据格式（DAT、HDF5、PRODML、Silixa、Febus、Terra15、APSensing、ZARR、NetCDF、SEG-Y、MiniSEED、TDMS）
 - 📊 **专业信号处理**：提供滤波、频率分析、FK 滤波、自动增益控制等
 - 🎨 **科学级可视化**：符合 Nature/Science 发表标准的波形图、瀑布图、FK 谱图
+- 🧠 **AI 推理集成**：原生支持 **PyTorch** 和 **ONNX** 模型，提供高性能推理流水线
+- 🤖 **智能 Agent 工具**：提供 AI Agent 工具集，支持自然语言驱动的数据深度挖掘
 - 🚀 **HPC 引擎**：基于 Xarray、Dask 和 Numba 构建，支持 TB 级数据的**核外处理**与**算子融合**技术
 - 🌊 **有状态处理**：独有的 Atoms 框架，确保分块/流式处理时的数学边界连续性
 - 🌍 **生态互联**：一键转换至 ObsPy (Stream/Trace) 和 DASCore (Patch) 格式，支持专业地震学分析
@@ -49,16 +51,16 @@ pip install -e .
 ```python
 from DASMatrix import df
 
-# 创建 DASFrame 并链式处理
+# 创建 DASFrame 并链式处理 + AI 推理
 result = (
     df(data, fs=1000)
     .detrend()
     .bandpass(1, 100)
-    .normalize()
+    .predict(model) # 应用 AI 模型
 )
 
 # 可视化
-result.plot_heatmap(title="Processed DAS Data")
+result.plot_heatmap(title="Processed DAS Data with AI labels")
 ```
 
 ## 下一步

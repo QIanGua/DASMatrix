@@ -141,6 +141,15 @@ processed.plot_std(
 | `plot_mean()` | 绘制均值剖面图 |
 | `plot_std()` | 绘制标准差剖面图 |
 
+### AI 与检测
+
+| 方法 | 说明 |
+|------|------|
+| `threshold_detect()` | 基于能量阈值的事件检测 |
+| `template_match()` | 信号模板匹配 (NCC) |
+| `predict(model)` | **[NEW]** 应用 AI 模型 (Torch/ONNX) |
+| `sta_lta(n_sta, n_lta)` | 标准 STA/LTA 能量比检测 (Recursive) |
+
 ---
 
 
@@ -218,9 +227,38 @@ pipeline = Sequential([
 
 # 实时流处理循环
 for chunk in stream_source:
-    # 每一块的处理都会继承上一块的滤波器状态，避免边缘跳变
+# 每一块的处理都会继承上一块的滤波器状态，避免边缘跳变
     processed_chunk = pipeline(chunk)
 ```
+
+### 9. AI 推理与 Agent 框架 (NEW)
+
+DASMatrix 集成了深度学习推理能力，支持直接对 DASBlock/DASFrame 应用预训练模型：
+
+```python
+from DASMatrix.ml.model import TorchModel, ONNXModel
+from DASMatrix.ml.pipeline import InferencePipeline
+
+# 1. 初始化模型后端 (支持 CPU/CUDA)
+model = ONNXModel("event_classifier.onnx", device="cpu")
+
+# 2. 构建推理流水线 (包含预处理逻辑)
+def my_preprocess(x):
+    return (x - x.mean()) / x.std()
+
+pipeline = InferencePipeline(model, preprocess_fn=my_preprocess)
+
+# 3. 在 DASFrame 中应用
+# 返回分类概率、置信度或标记结果
+predictions = frame.predict(pipeline)
+
+# 4. Agent 协作
+# 让 Agent 寻找并解释信号中的异常模式
+tools = dm.agent.DASAgentTools()
+insight = tools.run_inference(data_id="...", model_path="...")
+```
+
+---
 
 ## 下一步
 

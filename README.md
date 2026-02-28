@@ -22,11 +22,12 @@ DASMatrix is a high-performance Python framework specifically designed for Distr
 - **🚀 High-Efficiency Data Reading**: Support for 12+ data formats (DAT, HDF5, PRODML, Silixa, Febus, Terra15, APSensing, ZARR, NetCDF, SEG-Y, MiniSEED, TDMS) with **Lazy Loading**
 - **⚡ HPC Engine**: Built on **Xarray** and **Dask** for TB-level Out-of-Core processing with **Numba** JIT-optimized kernels and operator fusion
 - **🔗 Fluent Chainable API**: Intuitive signal processing workflows through `DASFrame`
-- **📊 Professional Signal Processing**: Comprehensive tools including spectral analysis, filtering, integration
+- **🧠 AI Inference Integration**: Native support for **PyTorch** and **ONNX** models with high-performance inference pipelines
+- **📊 Professional Signal Processing**: Comprehensive tools including spectral analysis, filtering, integration, and event detection
+- **🤖 Intelligent Agent Tools**: AI Agent toolkit supporting natural-language driven deep analysis and automated discovery
 - **📈 Scientific-Grade Visualization**: Multiple plot types including time-domain waveforms, spectra, spectrograms, waterfalls
 - **📏 Unit System**: First-class physical unit support via **Pint** integration
 - **🎲 Built-in Examples**: Easy generation of synthetic data (sine waves, chirps, events) for testing
-- **🎯 High-Performance Design**: Vectorized and parallel computing optimizations for critical algorithms
 
 ## 🚀 Quick Start
 
@@ -177,6 +178,28 @@ visualizer.WaterfallPlot(
 plt.show()
 ```
 
+#### 4. AI Inference & Model Prediction
+```python
+from DASMatrix.ml.model import ONNXModel
+
+# Load optimized model
+model = ONNXModel("path/to/model.onnx")
+
+# Predict directly in processing chain
+predictions = (
+    df.read("data.h5")
+    .bandpass(10, 100)
+    .normalize()
+    .predict(model) # Returns inference results
+)
+
+# Use Intelligent Agent Tools
+from DASMatrix.agent import DASAgentTools
+agent_tools = DASAgentTools()
+# Inference orchestrated by an LLM-based Agent via natural language
+result = agent_tools.run_inference(data_id="...", model_path="...")
+```
+
 ## 📚 Documentation
 
 - **[Full Documentation](https://QIanGua.github.io/DASMatrix)**: Complete API reference and tutorials
@@ -194,6 +217,13 @@ DASMatrix/
 ├── api/                   # Core API
 │   ├── dasframe.py       # DASFrame (Xarray/Dask Backend)
 │   └── df.py            # Functional API entry points
+├── ml/                    # [NEW] AI/Machine Learning Module
+│   ├── model.py          # Model Wrappers (Torch/ONNX)
+│   ├── pipeline.py       # Inference Pipelines
+│   └── exporter.py       # Model Export Utilities
+├── agent/                 # [NEW] Agent Engineering Framework
+│   ├── tools.py          # Intelligent Analysis Toolkit
+│   └── session.py        # Task Session Management
 ├── config/                # Configuration module
 │   ├── sampling_config.py # Sampling configuration
 │   └── visualization_config.py  # Visualization configuration

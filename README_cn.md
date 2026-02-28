@@ -22,11 +22,12 @@ DASMatrix 是一个专为分布式声学传感（DAS）数据处理和分析设�
 - **🚀 高效数据读取**：支持 12+ 种数据格式（DAT、HDF5、PRODML、Silixa、Febus、Terra15、APSensing、ZARR、NetCDF、SEG-Y、MiniSEED、TDMS），支持 **Lazy Loading**
 - **⚡ 分布式计算核心**：基于 **Xarray** 和 **Dask** 构建，支持外存处理（Out-of-Core）
 - **🔗 流畅的链式 API**：通过 `DASFrame` 提供直观的信号处理工作流
-- **📊 专业信号处理**：提供频谱分析、滤波、积分等多种信号处理功能
+- **🧠 AI 推理集成**：原生支持 **PyTorch** 和 **ONNX** 模型，提供高性能推理流水线
+- **📊 专业信号处理**：提供频谱分析、滤波、积分、事件检测等多种功能
+- **🤖 智能 Agent 工具**：提供 AI Agent 调用的工具集，支持自然语言驱动的深度分析
 - **📈 科学级可视化**：包含时域波形图、频谱图、时频图、瀑布图等多种可视化方式
 - **📏 单位系统**：通过 **Pint** 集成提供完善的物理单位支持
 - **🎲 内置示例**：便捷生成合成数据（正弦波、Chirp、模拟事件）用于测试
-- **🎯 高性能设计**：关键算法采用向量化和并行计算优化
 
 ## 🚀 快速开始
 
@@ -143,6 +144,28 @@ visualizer.WaterfallPlot(
 plt.show()
 ```
 
+#### 4. AI 推理与模型预测
+```python
+from DASMatrix.ml.model import ONNXModel
+
+# 加载加速模型
+model = ONNXModel("path/to/model.onnx")
+
+# 在处理链中直接预测
+predictions = (
+    df.read("data.h5")
+    .bandpass(10, 100)
+    .normalize()
+    .predict(model) # 返回推理结果
+)
+
+# 使用智能 Agent 工具
+from DASMatrix.agent import DASAgentTools
+agent_tools = DASAgentTools()
+# 通过自然语言接口由 Agent 调度模型分析异常
+result = agent_tools.run_inference(data_id="...", model_path="...")
+```
+
 ### API 迁移说明
 
 项目已统一推荐 `snake_case` 风格接口。旧版 `CamelCase` 方法保留一个兼容周期，并会发出 `DeprecationWarning`。
@@ -172,6 +195,13 @@ DASMatrix/
 ├── api/                   # 核心 API
 │   ├── dasframe.py       # DASFrame (Xarray/Dask 后端)
 │   └── df.py            # 函数式 API 入口
+├── ml/                    # [NEW] AI/机器学习模块
+│   ├── model.py          # 模型封装 (Torch/ONNX)
+│   ├── pipeline.py       # 推理流水线
+│   └── exporter.py       # 模型导出工具
+├── agent/                 # [NEW] Agent 工程框架
+│   ├── tools.py          # 智能分析工具集
+│   └── session.py        # 任务会话管理
 ├── config/                # 配置模块
 │   ├── sampling_config.py # 采样配置
 │   └── visualization_config.py  # 可视化配置

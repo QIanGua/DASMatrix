@@ -35,7 +35,7 @@
 | 时–频 | `stft`、`istft`、`spectrogram` | nperseg、noverlap | time × freq × ch | 事件定位/分类 |
 | 统计聚合 | `stack`、`mean`、`max`、`std` | win_len、axis | 与输入或降维 | 提升信噪比 |
 | 空域 | `spatial_smooth`、`beamforming` | kernel、velocity | time × ch 或 time | 波场成像 |
-| 检测 | `threshold_detect`、`template_match`、`ml_detect` | threshold、model | events list | 事件粗检 |
+| 检测 | `threshold_detect`、`template_match`、`predict(model)` | threshold、model | events list | 事件检测与 AI 识别 |
 | 可视化 | `plot_ts`、`plot_heatmap`、`plot_spec` | cmap、dB、ch_range | 图像 | 结果浏览 |
 
 ### 3.2 链式 DSL 语法
@@ -167,7 +167,15 @@ DASMatrix/                         # 项目根目录
 │   │   ├── dasframe.py            # DASFrame核心对象 ✅ (Xarray/Dask后端)
 │   │   ├── df.py                  # df函数式API入口 ✅
 │   │   └── spool.py               # DASSpool多文件管理 ✅
-│   │   # 📋 计划: dsl.py, q.py, easy.py, pipeline_builder.py
+│   │
+│   ├── ml/                        # AI推理与机器学习 ✅
+│   │   ├── model.py               # 模型封装 (Torch/ONNX) ✅
+│   │   ├── pipeline.py            # 推理流水线 ✅
+│   │   └── exporter.py            # 模型导出工具 ✅
+│   │
+│   ├── agent/                      # Agent 工程框架 ✅
+│   │   ├── tools.py               # 智能分析工具集 ✅
+│   │   └── session.py             # 会话管理 ✅
 │   │
 │   ├── core/                      # 核心模块 🚧
 │   │   ├── __init__.py
@@ -268,7 +276,9 @@ DASMatrix/                         # 项目根目录
 
 | 模块 | 用途 | 优先级 |
 |---|---|---|
-| `analysis/` | 事件检测器、分类器、频谱分析 | 高 |
+| `ml/` | AI模型封装、导出与推理流水线 | ✅ |
+| `agent/` | AI智能体工具集与会话管理 | ✅ |
+| `analysis/` | 事件检测器 (STA/LTA)、分类器 | 🚧 |
 | `storage/` | Zarr/Parquet存储后端、内存管理 | 中 |
 | `applications/` | 行业应用（管道监测、地震监测等） | 低 |
 | `common/` | 类型定义、异常、常量 | 中 |
